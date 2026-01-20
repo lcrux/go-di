@@ -1,5 +1,10 @@
 # Go Dependency Injection (go-di)
 
+![GitHub stars](https://img.shields.io/github/stars/lcrux/go-di)
+![GitHub forks](https://img.shields.io/github/forks/lcrux/go-di)
+![GitHub issues](https://img.shields.io/github/issues/lcrux/go-di)
+![GitHub license](https://img.shields.io/github/license/lcrux/go-di)
+
 ## Overview
 The `go-di` project is a lightweight and flexible dependency injection library for Go. It provides a simple way to manage service lifetimes and resolve dependencies in Go applications. The library supports three instance scopes: `Transient`, `Singleton`, and `Scoped`.
 
