@@ -1,4 +1,4 @@
-module go-di/demo
+module demo
 
 go 1.25.4
 
