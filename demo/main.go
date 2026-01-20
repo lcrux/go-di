@@ -1,84 +1,41 @@
 package main
 
 import (
-	"fmt"
 	"go-di/demo/models"
 	"go-di/demo/repositories"
 	"go-di/demo/services"
 	"log"
 
-	"github.com/lcrux/go-di/registry"
+	godi "github.com/lcrux/go-di"
 )
 
-func NewDummyService(helloSvc HelloService, message string) DummyService {
-	if helloSvc == nil {
-		log.Fatal("HelloService cannot be nil")
-	}
-	return &DummyServiceImpl{
-		message:  message,
-		helloSvc: helloSvc,
-	}
-}
-
-type DummyService interface {
-	DoSomething()
-}
-
-type DummyServiceImpl struct {
-	helloSvc   HelloService
-	anotherSvc AnotherService
-	message    string
-}
-
-func (d *DummyServiceImpl) DoSomething() {
-	d.helloSvc.SayHello(d.message)
-}
-
-func NewHelloService() HelloService {
-	return &HelloServiceImpl{}
-}
-
-type HelloService interface {
-	SayHello(name string)
-}
-
-type HelloServiceImpl struct {
-}
-
-func (h *HelloServiceImpl) SayHello(name string) {
-	fmt.Printf("Hello, %s!\n", name)
-}
-
-type AnotherService interface {
-	DoAnotherThing()
-}
-
 func init() {
-	registry.Register[services.OrderService](services.NewOrderService, registry.Transient)
-	registry.Register[services.UserService](services.NewUserService, registry.Scoped)
-	registry.Register[repositories.OrderRepository](repositories.NewOrderRepository, registry.Singleton)
-	registry.Register[repositories.UserRepository](repositories.NewUserRepository, registry.Singleton)
-	registry.Register[DummyService](func(helloSvc HelloService) DummyService {
-		return NewDummyService(helloSvc, "I am a DummyService")
-	}, registry.Transient)
-	registry.Register[HelloService](NewHelloService, registry.Transient)
+	godi.Register[services.OrderService](services.NewOrderService, godi.Transient)
+	godi.Register[services.UserService](services.NewUserService, godi.Scoped)
+	godi.Register[repositories.OrderRepository](repositories.NewOrderRepository, godi.Singleton)
+	godi.Register[repositories.UserRepository](repositories.NewUserRepository, godi.Singleton)
+
+	godi.Register[services.DummyService](func(helloSvc services.HelloService) services.DummyService {
+		return services.NewDummyService(helloSvc, "I am a DummyService")
+	}, godi.Transient)
+	godi.Register[services.HelloService](services.NewHelloService, godi.Transient)
 }
 
 func main() {
-	dummyService, err := registry.Resolve[DummyService]()
+	dummyService, err := godi.Resolve[services.DummyService]()
 	if err != nil {
 		log.Printf("Failed to resolve DummyService: %v\n", err)
 		return
 	}
 	dummyService.DoSomething()
 
-	orderService, err := registry.Resolve[services.OrderService]()
+	orderService, err := godi.Resolve[services.OrderService]()
 	if err != nil {
 		log.Printf("Failed to resolve OrderService: %v\n", err)
 		return
 	}
 
-	userService, err := registry.Resolve[services.UserService]()
+	userService, err := godi.Resolve[services.UserService]()
 	if err != nil {
 		log.Printf("Failed to resolve UserService: %v\n", err)
 		return
@@ -109,12 +66,10 @@ func main() {
 	}
 	log.Printf("Retrieved user: %+v\n", user)
 
-	log.Println("Dependency Injection Container in Go")
-
-	regCtx := registry.NewRegistryContext()
+	regCtx := godi.NewRegistryContext()
 	defer regCtx.Close()
 
-	usrService, err := registry.ResolveWithContext[services.UserService](regCtx)
+	usrService, err := godi.ResolveWithContext[services.UserService](regCtx)
 	if err != nil {
 		log.Printf("Failed to resolve UserService with context: %v\n", err)
 		return
@@ -126,4 +81,6 @@ func main() {
 		return
 	}
 	log.Printf("Retrieved user with context: %+v\n", usr)
+
+	log.Println("Dependency Injection Container in Go")
 }
