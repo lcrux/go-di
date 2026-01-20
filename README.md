@@ -1,179 +1,174 @@
-# go-di
+# Go Dependency Injection (go-di)
 
-`go-di` is a lightweight and flexible dependency injection library for Go. It simplifies the management of dependencies in your Go applications, making your code more modular, testable, and maintainable.
+## Overview
+The `go-di` project is a lightweight and flexible dependency injection library for Go. It provides a simple way to manage service lifetimes and resolve dependencies in Go applications. The library supports three instance scopes: `Transient`, `Singleton`, and `Scoped`.
+
+### Why Use go-di?
+- Simplifies dependency management in Go applications.
+- Provides thread-safe service resolution.
+- Supports scoped contexts for better resource management.
+- Lightweight and easy to integrate.
 
 ## Features
-
-- **Simple API**: Easy to use and integrate into existing projects.
-- **Flexible Dependency Management**: Supports constructor injection and lazy initialization.
-- **Modular Design**: Encourages clean and modular code architecture.
-- **Testable**: Simplifies mocking and testing by managing dependencies effectively.
+- **Service Registration**: Register services with factory functions and specify their lifetime scopes.
+- **Dependency Resolution**: Automatically resolve dependencies and manage their lifetimes.
+- **Scoped Contexts**: Create and manage scoped instances for specific contexts.
+- **Thread-Safe**: Built with concurrency in mind, ensuring thread safety.
 
 ## Installation
-
-To install the library, use:
+To use `go-di`, add it to your Go module:
 
 ```bash
-go get github.com/username/go-di
+go get github.com/lcrux/go-di
 ```
 
 ## Getting Started
 
-Here’s a quick example to demonstrate how to use `go-di` in your project:
-
-### 1. Define Your Services
-
-```go
-package services
-
-type UserService struct {
-    // Dependencies can be injected here
-}
-
-func (u *UserService) GetUser(id int) string {
-    return "User Name"
-}
-```
-
-### 2. Register Dependencies
-
-```go
-package registry
-
-import (
-    "github.com/username/go-di"
-    "your_project/services"
-)
-
-func RegisterDependencies(container *di.Container) {
-    container.Register(func() *services.UserService {
-        return &services.UserService{}
-    })
-}
-```
-
-### 3. Resolve and Use Dependencies
+### Quick Start Example
+Here’s a complete example to get started:
 
 ```go
 package main
 
 import (
     "fmt"
-    "github.com/username/go-di"
-    "your_project/registry"
-    "your_project/services"
+    "github.com/lcrux/go-di/v0"
 )
 
-func main() {
-    container := di.NewContainer()
-    registry.RegisterDependencies(container)
-
-    userService := container.Resolve[*services.UserService]()
-    fmt.Println(userService.GetUser(1))
+type MyService struct {
+    Name string
 }
-```
-
-## Debugging
-
-Enable debug logs to troubleshoot the library's behavior by setting the `GODI_DEBUG` environment variable to `true`:
-
-```bash
-export GODI_DEBUG=true
-```
-
-This will enable detailed logs for operations like service registration, resolution, and context management.
-
----
-
-## Scoped Contexts
-
-`go-di` supports scoped contexts for managing service instances within specific lifetimes. This is useful for scenarios like request-based lifetimes in web applications.
-
-### Example: Using Scoped Contexts
-
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/username/go-di/v1/registry"
-)
 
 func main() {
-    container := registry.NewRegistryContext()
-
-    // Register a service
-    container.SetInstance(reflect.TypeOf("example"), reflect.ValueOf("Scoped Instance"))
+    // Register the service
+    godi.Register[MyService](func() *MyService {
+        return &MyService{Name: "Hello, go-di!"}
+    }, godi.Singleton)
 
     // Resolve the service
-    instance, _ := container.GetInstance(reflect.TypeOf("example"))
-    fmt.Println(instance.String())
+    service, err := godi.Resolve[MyService]()
+    if err != nil {
+        panic(err)
+    }
 
-    // Clean up scoped instances
-    container.Close()
+    fmt.Println(service.Name)
 }
 ```
 
-## Examples
-
 ### Registering Services
-
-Register services with different lifetimes (e.g., `Transient`, `Scoped`, `Singleton`):
+To register a service, use the `Register` function:
 
 ```go
-import "github.com/username/go-di/v1/registry"
+import "github.com/lcrux/go-di"
 
-func init() {
-    registry.Register[MyService](NewMyService, registry.Transient)
-    registry.Register[MyRepository](NewMyRepository, registry.Singleton)
-}
+type MyService struct {}
+
+godi.Register[MyService](func() *MyService {
+    return &MyService{}
+}, godi.Singleton)
 ```
 
 ### Resolving Services
-
-Resolve services from the registry and use them:
+To resolve a registered service, use the `Resolve` function:
 
 ```go
-import "github.com/username/go-di/v1/registry"
-
-func main() {
-    myService, err := registry.Resolve[MyService]()
-    if err != nil {
-        log.Fatalf("Failed to resolve MyService: %v", err)
-    }
-
-    myService.DoSomething()
+service, err := godi.Resolve[MyService]()
+if err != nil {
+    log.Fatalf("Failed to resolve service: %v", err)
 }
 ```
 
 ### Using Scoped Contexts
-
-Create a scoped context for managing service lifetimes:
+To use scoped instances, create a new `RegistryContext`:
 
 ```go
-import "github.com/username/go-di/v1/registry"
+ctx := godi.NewRegistryContext()
+defer ctx.Close()
 
-func main() {
-    regCtx := registry.NewRegistryContext()
-    defer regCtx.Close()
-
-    myService, err := registry.ResolveWithContext[MyService](regCtx)
-    if err != nil {
-        log.Fatalf("Failed to resolve MyService with context: %v", err)
-    }
-
-    myService.DoSomething()
+scopedService, err := godi.ResolveWithContext[MyService](ctx)
+if err != nil {
+    log.Fatalf("Failed to resolve scoped service: %v", err)
 }
 ```
 
-## Contributing
+### Services with Dependencies
+You can register and resolve services that depend on other services. Here’s an example:
 
-Contributions are welcome! Feel free to open issues or submit pull requests to improve the library.
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/lcrux/go-di/v0"
+)
+
+type Database struct {
+    ConnectionString string
+}
+
+type UserService struct {
+    DB *Database
+}
+
+func main() {
+    // Register the Database service
+    godi.Register[Database](func() *Database {
+        return &Database{ConnectionString: "postgres://user:password@localhost/db"}
+    }, godi.Singleton)
+
+    // Register the UserService with a dependency on Database
+    godi.Register[UserService](func(db *Database) *UserService {
+        return &UserService{DB: db}
+    }, godi.Singleton)
+
+    // Resolve the UserService
+    userService, err := godi.Resolve[UserService]()
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Printf("UserService is using database with connection string: %s\n", userService.DB.ConnectionString)
+}
+```
+
+## Project Structure
+- **context.go**: Manages scoped instances within a registry context.
+- **registry.go**: Handles service registration and resolution.
+- **utils.go**: Contains utility functions for debugging and logging.
+- **tests/**: Unit tests for the library.
+
+## Running Tests
+To run the tests, use the following command:
+
+```bash
+go test ./tests/...
+```
+
+## Debugging
+The library includes `DebugLog` functions to help with debugging. Ensure that debugging is enabled in your environment to see detailed logs.
+
+```bash
+# Enable debugging for go-di
+
+# Linux / macOS
+export GODI_DEBUG=true
+
+# Windows PowerShell
+$env:GODI_DEBUG="true"
+
+# Windows Command Prompt
+set GODI_DEBUG=true
+```
+
+## Contributing
+Contributions are welcome! Please submit a pull request or open an issue to discuss your ideas.
+
+## Versioning
+This library follows [Semantic Versioning](https://semver.org/). To install a specific version, use:
+
+```bash
+go get github.com/lcrux/go-di@<version>
+```
 
 ## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-Start building modular and testable Go applications with `go-di` today!
+This project is licensed under the MIT License. See the [LICENSE](../LICENSE) file for details.

@@ -1,4 +1,4 @@
-package registry
+package godi
 
 import (
 	"fmt"
@@ -83,7 +83,7 @@ func Register[T any](factoryFn interface{}, scope InstanceScope) error {
 		registryEntry.factoryFnParams[i] = factoryFnType.In(i)
 	}
 
-	debugLog("Registered service: %s with scope: %v", serviceType.String(), scope)
+	DebugLog("Registered service: %s with scope: %v", serviceType.String(), scope)
 	return nil
 }
 
@@ -109,14 +109,14 @@ func resolve[T interface{}](ctx RegistryContext) (T, error) {
 		return zero, fmt.Errorf("service not registered: %s", serviceType.String())
 	}
 
-	debugLog("Resolving service: %s", serviceType.String())
+	DebugLog("Resolving service: %s", serviceType.String())
 
 	dependencies, err := getDependencyTree(serviceType)
 	if err != nil {
 		return zero, fmt.Errorf("failed to get dependency tree for %s: %w", serviceType.String(), err)
 	}
 
-	debugLog("Dependencies for service %s: %v", serviceType.String(), dependencies)
+	DebugLog("Dependencies for service %s: %v", serviceType.String(), dependencies)
 
 	resolved, err := resolveDependencies(dependencies, ctx)
 	if err != nil {
@@ -133,7 +133,7 @@ func resolve[T interface{}](ctx RegistryContext) (T, error) {
 		return zero, fmt.Errorf("resolved service is not of expected type %s, got %s", serviceType.String(), value.Type().String())
 	}
 
-	debugLog("Successfully resolved service: %s", serviceType.String())
+	DebugLog("Successfully resolved service: %s", serviceType.String())
 	return value.Interface().(T), nil
 }
 
@@ -162,7 +162,7 @@ func getDependencyTree(serviceType reflect.Type) ([]reflect.Type, error) {
 		fifoQueue = append(fifoQueue, entry.factoryFnParams...)
 	}
 	slices.Reverse(dependencies)
-	debugLog("Dependency tree for service %s: %v", serviceType.String(), dependencies)
+	DebugLog("Dependency tree for service %s: %v", serviceType.String(), dependencies)
 	return dependencies, nil
 }
 
@@ -178,20 +178,20 @@ func resolveDependencies(dependencies []reflect.Type, ctx RegistryContext) (map[
 			return nil, fmt.Errorf("service not found: %s", dep.String())
 		}
 
-		debugLog("Resolving dependency: %s", dep.String())
+		DebugLog("Resolving dependency: %s", dep.String())
 
 		switch entry.scope {
 		case Singleton:
 			cachedInstance := entry.singletonCache
 			if cachedInstance != nil {
-				debugLog("Using cached singleton instance for: %s", dep.String())
+				DebugLog("Using cached singleton instance for: %s", dep.String())
 				resolved[dep] = reflect.ValueOf(cachedInstance)
 				continue
 			}
 		case Scoped:
 			cachedInstance, exists := ctx.GetInstance(dep)
 			if exists {
-				debugLog("Using cached scoped instance for: %s", dep.String())
+				DebugLog("Using cached scoped instance for: %s", dep.String())
 				resolved[dep] = cachedInstance
 				continue
 			}
@@ -210,7 +210,7 @@ func resolveDependencies(dependencies []reflect.Type, ctx RegistryContext) (map[
 			return nil, fmt.Errorf("factory for service %s returned an invalid instance", dep.String())
 		}
 
-		debugLog("Created new instance for: %s", dep.String())
+		DebugLog("Created new instance for: %s", dep.String())
 
 		switch entry.scope {
 		case Singleton:
