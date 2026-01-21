@@ -1,0 +1,16 @@
+version: "2.8" # Ensure the version is a string
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - gocyclo
+    - staticcheck
+    - deadcode # Added to detect unused code
+    - gosimple # Added to highlight simpler alternatives
+    - unused # Added to find unused variables, constants, and functions
+  disable:
+    - maligned # Removed disabling of maligned to check for struct alignment issues
