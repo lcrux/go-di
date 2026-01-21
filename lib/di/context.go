@@ -63,14 +63,14 @@ func (ctx *registryContextImpl) SetInstance(serviceType reflect.Type, instance r
 
 // Close cleans up all scoped instances in the context.
 // Logs the operation and confirms the context has been closed.
-func (r *registryContextImpl) Close() {
-	DebugLog("[Context ID: %s] Closing registry context", r.ID)
+func (ctx *registryContextImpl) Close() {
+	DebugLog("[Context ID: %s] Closing registry context", ctx.ID)
 	// Clean up the scoped instances
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	for k := range r.scopedInstances {
-		DebugLog("[Context ID: %s] Deleting instance for service type: %v", r.ID, k)
-		delete(r.scopedInstances, k)
+	ctx.mutex.Lock()
+	defer ctx.mutex.Unlock()
+	for k := range ctx.scopedInstances {
+		DebugLog("[Context ID: %s] Deleting instance for service type: %v", ctx.ID, k)
+		delete(ctx.scopedInstances, k)
 	}
-	DebugLog("[Context ID: %s] Registry context closed", r.ID)
+	DebugLog("[Context ID: %s] Registry context closed", ctx.ID)
 }

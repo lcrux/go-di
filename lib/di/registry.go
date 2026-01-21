@@ -21,11 +21,10 @@ const (
 
 // registryEntry represents a registered service in the registry.
 type registryEntry struct {
-	factoryFn        reflect.Value  // The factory function to create instances of the service
-	factoryFnParams  []reflect.Type // The parameter types of the factory function
-	scope            InstanceScope  // The scope of the service (Transient, Singleton, Scoped)
-	singletonCache   interface{}    // Cache for singleton instances
-	setSingletonOnce sync.Once      // Ensures singleton initialization happens only once
+	factoryFn       reflect.Value  // The factory function to create instances of the service
+	factoryFnParams []reflect.Type // The parameter types of the factory function
+	scope           InstanceScope  // The scope of the service (Transient, Singleton, Scoped)
+	singletonCache  interface{}    // Cache for singleton instances
 }
 
 // servicesRegistry is the global registry for all registered services.
@@ -170,57 +169,78 @@ func getDependencyTree(serviceType reflect.Type) ([]reflect.Type, error) {
 // It returns a map of service types to their resolved reflect.Value instances.
 func resolveDependencies(dependencies []reflect.Type, ctx RegistryContext) (map[reflect.Type]reflect.Value, error) {
 	resolved := make(map[reflect.Type]reflect.Value)
-	for _, dep := range dependencies {
+	for _, depType := range dependencies {
 		mutex.RLock()
-		entry, exists := servicesRegistry[dep]
+		entry, exists := servicesRegistry[depType]
 		mutex.RUnlock()
 		if !exists {
-			return nil, fmt.Errorf("service not found: %s", dep.String())
+			return nil, fmt.Errorf("service not found: %s", depType.String())
 		}
 
-		DebugLog("Resolving dependency: %s", dep.String())
+		DebugLog("Resolving dependency: %s", depType.String())
 
-		switch entry.scope {
-		case Singleton:
-			cachedInstance := entry.singletonCache
-			if cachedInstance != nil {
-				DebugLog("Using cached singleton instance for: %s", dep.String())
-				resolved[dep] = reflect.ValueOf(cachedInstance)
-				continue
-			}
-		case Scoped:
-			cachedInstance, exists := ctx.GetInstance(dep)
-			if exists {
-				DebugLog("Using cached scoped instance for: %s", dep.String())
-				resolved[dep] = cachedInstance
-				continue
-			}
+		// Check if the instance is already cached for Singleton or Scoped scope
+		cached, ok := loadInstance(entry.scope, depType, ctx)
+		if ok {
+			DebugLog("Using cached instance for: %s", depType.String())
+			resolved[depType] = cached
+			continue
 		}
 
 		params := make([]reflect.Value, 0, len(entry.factoryFnParams))
 		for _, paramType := range entry.factoryFnParams {
 			paramValue, exists := resolved[paramType]
 			if !exists {
-				return nil, fmt.Errorf("dependency %s for service %s not resolved", paramType.String(), dep.String())
+				return nil, fmt.Errorf("dependency %s for service %s not resolved", paramType.String(), depType.String())
 			}
 			params = append(params, paramValue)
 		}
 		instance := entry.factoryFn.Call(params)[0]
 		if instance == (reflect.Value{}) {
-			return nil, fmt.Errorf("factory for service %s returned an invalid instance", dep.String())
+			return nil, fmt.Errorf("factory for service %s returned an invalid instance", depType.String())
 		}
 
-		DebugLog("Created new instance for: %s", dep.String())
+		DebugLog("Created new instance for: %s", depType.String())
 
-		switch entry.scope {
-		case Singleton:
-			mutex.Lock()
-			entry.singletonCache = instance.Interface()
-			mutex.Unlock()
-		case Scoped:
-			ctx.SetInstance(dep, instance)
-		}
-		resolved[dep] = instance
+		persistInstance(entry.scope, depType, instance, ctx)
+		resolved[depType] = instance
 	}
 	return resolved, nil
+}
+
+// loadInstance attempts to load a cached instance of the given service type based on its scope.
+//
+// It returns the cached instance and a boolean indicating whether the instance was found in the cache.
+func loadInstance(instanceScope InstanceScope, depType reflect.Type, ctx RegistryContext) (reflect.Value, bool) {
+	switch instanceScope {
+	case Singleton:
+		mutex.RLock()
+		defer mutex.RUnlock()
+		entry, exists := servicesRegistry[depType]
+		if exists && entry.singletonCache != nil {
+			return reflect.ValueOf(entry.singletonCache), true
+		}
+	case Scoped:
+		instance, exists := ctx.GetInstance(depType)
+		if exists {
+			return instance, true
+		}
+	}
+	return reflect.Value{}, false
+}
+
+// persistInstance stores the given instance in the appropriate cache based on its scope.
+func persistInstance(instanceScope InstanceScope, depType reflect.Type, instance reflect.Value, ctx RegistryContext) {
+	switch instanceScope {
+	case Singleton:
+		mutex.Lock()
+		defer mutex.Unlock()
+		entry, exists := servicesRegistry[depType]
+		if exists {
+			entry.singletonCache = instance.Interface()
+			servicesRegistry[depType] = entry
+		}
+	case Scoped:
+		ctx.SetInstance(depType, instance)
+	}
 }

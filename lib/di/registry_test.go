@@ -3,8 +3,6 @@ package di
 import (
 	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestRegisterAndResolve(t *testing.T) {
@@ -44,37 +42,39 @@ func TestResolveWithDependencies(t *testing.T) {
 	}, Singleton)
 	resolved, err := Resolve[*ServiceWithDependency]()
 
-	assert.NotNil(t, resolved, "Expected non-nil resolved service with dependency")
-	assert.NoError(t, err, "Expected no error when resolving service with dependency")
-	assert.NotNil(t, resolved.Dep, "Expected dependency to be resolved")
+	if resolved == nil {
+		t.Fatalf("Expected non-nil resolved service with dependency")
+	}
+	if err != nil {
+		t.Fatalf("Expected no error when resolving service with dependency, got: %v", err)
+	}
+	if resolved.Dep == nil {
+		t.Fatal("Expected dependency to be resolved")
+	}
 
 	typOfDep := TypeOf[*Dependency]()
 	typOfResolvedDep := reflect.TypeOf(resolved.Dep)
 
-	assert.Equal(t, typOfResolvedDep, typOfDep, "Expected resolved dependency type to match")
+	if typOfResolvedDep != typOfDep {
+		t.Errorf("Expected resolved dependency type to match %v, got %v", typOfDep, typOfResolvedDep)
+	}
 }
 
 func TestCircularDependencyDetection(t *testing.T) {
-	type A struct{}
-	type B struct{}
+	type A struct{ b interface{} }
+	type B struct{ a interface{} }
 
 	_ = Register[*A](func(b *B) *A {
-		return &A{}
+		return &A{b: b}
 	}, Singleton)
 
 	_ = Register[*B](func(a *A) *B {
-		return &B{}
-	}, Singleton)
-
-	_ = Register[*B](func(a *A) *B {
-		return &B{}
-	}, Singleton)
-
-	_ = Register[*B](func(a *A) *B {
-		return &B{}
+		return &B{a: a}
 	}, Singleton)
 
 	_, err := Resolve[*A]()
 
-	assert.Error(t, err, "Expected error due to circular dependency")
+	if err == nil {
+		t.Fatal("Expected error due to circular dependency")
+	}
 }

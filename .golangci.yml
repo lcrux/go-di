@@ -1,16 +1,39 @@
-version: "2.8" # Ensure the version is a string
-
-run:
-  timeout: 5m
-
+version: "2"
 linters:
   enable:
     - govet
-    - errcheck
-    - gocyclo
     - staticcheck
-    - deadcode # Added to detect unused code
-    - gosimple # Added to highlight simpler alternatives
-    - unused # Added to find unused variables, constants, and functions
-  disable:
-    - maligned # Removed disabling of maligned to check for struct alignment issues
+    - unused
+    - errcheck
+    - ineffassign
+    - gosec
+    - prealloc
+    - depguard
+    - dupl
+    - revive
+    - nakedret
+  settings:
+    depguard:
+      rules:
+        depguard-uuid-rule:
+          list-mode: lax
+          files: ["**/*.go"]
+          allow: ["github.com/google/uuid"]
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
