@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/lcrux/go-di/v0"
+	"github.com/lcrux/go-di/v0/di"
 )
 
 func init() {

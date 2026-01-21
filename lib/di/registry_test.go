@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/lcrux/go-di/v0"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,12 +14,12 @@ func TestRegisterAndResolve(t *testing.T) {
 		return &TestService{}
 	}
 
-	err := di.Register[*TestService](factoryFn, di.Singleton)
+	err := Register[*TestService](factoryFn, Singleton)
 	if err != nil {
 		t.Fatalf("Failed to register service: %v", err)
 	}
 
-	resolved, err := di.Resolve[*TestService]()
+	resolved, err := Resolve[*TestService]()
 	if err != nil {
 		t.Fatalf("Failed to resolve service: %v", err)
 	}
@@ -36,20 +35,20 @@ func TestResolveWithDependencies(t *testing.T) {
 		Dep *Dependency
 	}
 
-	_ = di.Register[*Dependency](func() *Dependency {
+	_ = Register[*Dependency](func() *Dependency {
 		return &Dependency{}
-	}, di.Singleton)
+	}, Singleton)
 
-	_ = di.Register[*ServiceWithDependency](func(dep *Dependency) *ServiceWithDependency {
+	_ = Register[*ServiceWithDependency](func(dep *Dependency) *ServiceWithDependency {
 		return &ServiceWithDependency{Dep: dep}
-	}, di.Singleton)
-	resolved, err := di.Resolve[*ServiceWithDependency]()
+	}, Singleton)
+	resolved, err := Resolve[*ServiceWithDependency]()
 
 	assert.NotNil(t, resolved, "Expected non-nil resolved service with dependency")
 	assert.NoError(t, err, "Expected no error when resolving service with dependency")
 	assert.NotNil(t, resolved.Dep, "Expected dependency to be resolved")
 
-	typOfDep := di.TypeOf[*Dependency]()
+	typOfDep := TypeOf[*Dependency]()
 	typOfResolvedDep := reflect.TypeOf(resolved.Dep)
 
 	assert.Equal(t, typOfResolvedDep, typOfDep, "Expected resolved dependency type to match")
@@ -59,15 +58,23 @@ func TestCircularDependencyDetection(t *testing.T) {
 	type A struct{}
 	type B struct{}
 
-	_ = di.Register[*A](func(b *B) *A {
+	_ = Register[*A](func(b *B) *A {
 		return &A{}
-	}, di.Singleton)
+	}, Singleton)
 
-	_ = di.Register[*B](func(a *A) *B {
+	_ = Register[*B](func(a *A) *B {
 		return &B{}
-	}, di.Singleton)
+	}, Singleton)
 
-	_, err := di.Resolve[*A]()
+	_ = Register[*B](func(a *A) *B {
+		return &B{}
+	}, Singleton)
+
+	_ = Register[*B](func(a *A) *B {
+		return &B{}
+	}, Singleton)
+
+	_, err := Resolve[*A]()
 
 	assert.Error(t, err, "Expected error due to circular dependency")
 }
