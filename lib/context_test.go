@@ -1,21 +1,20 @@
-package tests
+package di
 
 import (
 	"reflect"
 	"testing"
 
-	godi "github.com/lcrux/go-di"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewRegistryContext(t *testing.T) {
-	ctx := godi.NewRegistryContext()
+	ctx := NewRegistryContext()
 
 	assert.NotNil(t, ctx, "Expected non-nil RegistryContext")
 }
 
 func TestRegistryContext_SetAndGetInstance(t *testing.T) {
-	ctx := godi.NewRegistryContext()
+	ctx := NewRegistryContext()
 	serviceType := reflect.TypeOf("string")
 	instance := reflect.ValueOf("test-instance")
 
@@ -28,7 +27,7 @@ func TestRegistryContext_SetAndGetInstance(t *testing.T) {
 }
 
 func TestRegistryContext_Close(t *testing.T) {
-	ctx := godi.NewRegistryContext()
+	ctx := NewRegistryContext()
 	serviceType := reflect.TypeOf("string")
 	instance := reflect.ValueOf("test-instance")
 

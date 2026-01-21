@@ -1,4 +1,4 @@
-package tests
+package di
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	godi "github.com/lcrux/go-di"
+	"github.com/lcrux/go-di/v0"
 )
 
 func TestDebugLog(t *testing.T) {
@@ -22,7 +22,7 @@ func TestDebugLog(t *testing.T) {
 	log.SetFlags(0)
 	defer log.SetFlags(log.LstdFlags)
 
-	godi.DebugLog("Test message: %d", 42)
+	di.DebugLog("Test message: %d", 42)
 
 	if strings.Trim(logOutput.lastMessage, "\n") == "" {
 		t.Fatal("Expected log message to be written")
