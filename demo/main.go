@@ -7,19 +7,19 @@ import (
 	"log"
 	"net/http"
 
-	godi "github.com/lcrux/go-di"
+	"github.com/lcrux/go-di/v0"
 )
 
 func init() {
-	godi.Register[controllers.TodoController](controllers.NewTodoController, godi.Singleton)
-	godi.Register[services.TodoService](services.NewTodoService, godi.Transient)
-	godi.Register[repositories.TodoRepository](repositories.NewTodoRepository, godi.Singleton)
+	di.Register[controllers.TodoController](controllers.NewTodoController, di.Singleton)
+	di.Register[services.TodoService](services.NewTodoService, di.Transient)
+	di.Register[repositories.TodoRepository](repositories.NewTodoRepository, di.Singleton)
 }
 
 func main() {
 	r := http.NewServeMux()
 
-	todoController, err := godi.Resolve[controllers.TodoController]()
+	todoController, err := di.Resolve[controllers.TodoController]()
 	if err != nil {
 		panic(err)
 	}
