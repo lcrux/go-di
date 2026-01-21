@@ -1,7 +1,6 @@
 package di
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -36,9 +35,6 @@ type mockWriter struct {
 }
 
 func (m *mockWriter) Write(p []byte) (n int, err error) {
-
-	fmt.Printf("Write called with: %s\n", string(p))
-
 	m.lastMessage = string(p)
 	return len(p), nil
 }

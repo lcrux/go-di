@@ -1,0 +1,39 @@
+version: "2"
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - errcheck
+    - ineffassign
+    - gosec
+    - prealloc
+    - depguard
+    - dupl
+    - revive
+    - nakedret
+  settings:
+    depguard:
+      rules:
+        depguard-uuid-rule:
+          list-mode: lax
+          files: ["**/*.go"]
+          allow: ["github.com/google/uuid"]
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
