@@ -9,10 +9,16 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/joho/godotenv"
 	"github.com/lcrux/go-di/v0/di"
 )
 
 func init() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+	}
+
 	di.Register[core.ServerMuxRouter](core.NewServerMuxRouter, di.Singleton)
 	di.Register[controllers.TodoController](controllers.NewTodoController, di.Singleton)
 	di.Register[services.TodoService](services.NewTodoService, di.Transient)

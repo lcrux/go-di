@@ -17,7 +17,7 @@ This is a demo application showcasing the usage of the `go-di` dependency inject
 ```
 **Example:**
 ```bash
-curl -X POST http://localhost:8080/todos \
+curl -X POST http://localhost:8080/api/todos \
 -H "Content-Type: application/json" \
 -d '{ "title": "Sample TODO", "description": "This is a sample TODO item." }'
 ```
@@ -28,7 +28,7 @@ curl -X POST http://localhost:8080/todos \
 **Description:** Retrieves a list of all TODO items.  
 **Example:**
 ```bash
-curl -X GET http://localhost:8080/todos
+curl -X GET http://localhost:8080/api/todos
 ```
 
 ### 3. Mark TODO as Done
@@ -39,12 +39,12 @@ curl -X GET http://localhost:8080/todos
 **Request Body:**
 ```json
 {
-  "id": 1715211870
+  "id": <todo-id>
 }
 ```
 **Example:**
 ```bash
-curl -X PATCH http://localhost:8080/todos/1715211870/done \
+curl -X PATCH http://localhost:8080/api/todos/<todo-id>/done \
 -H "Content-Type: application/json" \
--d '{ "id": 1715211870 }'
+-d '{ "id": <todo-id> }'
 ```
