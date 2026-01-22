@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"demo/core"
 	"demo/models"
 	"demo/services"
 	"encoding/json"
@@ -9,13 +10,14 @@ import (
 	"strconv"
 )
 
-func NewTodoController(ts services.TodoService) TodoController {
+func NewTodoController(router core.ServerMuxRouter, ts services.TodoService) TodoController {
 	return &todoControllerImpl{
 		todoService: ts,
 	}
 }
 
 type TodoController interface {
+	core.Controller
 	GetTodos(w http.ResponseWriter, r *http.Request)
 	CreateTodo(w http.ResponseWriter, r *http.Request)
 	CloseTodo(w http.ResponseWriter, r *http.Request)
@@ -23,6 +25,18 @@ type TodoController interface {
 
 type todoControllerImpl struct {
 	todoService services.TodoService
+}
+
+func (c *todoControllerImpl) RegisterRoutes(router core.ServerMuxRouter, middleware core.Middleware) {
+	if middleware == nil {
+		middleware = core.PassThroughMiddleware
+	}
+
+	groupRouter := router.WithGroup("/todos")
+
+	groupRouter.Patch("/{id}/done", middleware(http.HandlerFunc(c.CloseTodo)))
+	groupRouter.Get("/", middleware(http.HandlerFunc(c.GetTodos)))
+	groupRouter.Post("/", middleware(http.HandlerFunc(c.CreateTodo)))
 }
 
 func (c *todoControllerImpl) GetTodos(w http.ResponseWriter, r *http.Request) {
