@@ -39,12 +39,12 @@ curl -X GET http://localhost:8080/api/todos
 **Request Body:**
 ```json
 {
-  "id": 1715211870
+  "id": <todo-id>
 }
 ```
 **Example:**
 ```bash
-curl -X PATCH http://localhost:8080/api/todos/1715211870/done \
+curl -X PATCH http://localhost:8080/api/todos/<todo-id>/done \
 -H "Content-Type: application/json" \
--d '{ "id": 1715211870 }'
+-d '{ "id": <todo-id> }'
 ```
