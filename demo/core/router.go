@@ -9,7 +9,8 @@ import (
 	"strings"
 )
 
-var httpMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
+// DO NOT confuse with CORS allowed methods
+var routerHttpMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 // cleanUrlPath trims spaces and removes trailing slashes from the URL path if it is longer than 1 character.
 func cleanUrlPath(p string) string {
@@ -71,8 +72,8 @@ func (r *serverMuxRouterImpl) addRouteWithMethod(method string, path string, han
 	if method == "" {
 		panic("method cannot be empty")
 	}
-	if !slices.Contains(httpMethods, strings.ToUpper(method)) {
-		panic(fmt.Sprintf("method is not supported, must be one of [%s], got %s", strings.Join(httpMethods, ", "), method))
+	if !slices.Contains(routerHttpMethods, strings.ToUpper(method)) {
+		panic(fmt.Sprintf("method is not supported, must be one of [%s], got %s", strings.Join(routerHttpMethods, ", "), method))
 	}
 	if path == "" {
 		panic("path cannot be empty")

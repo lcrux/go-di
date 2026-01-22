@@ -3,12 +3,13 @@ package middlewares
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
-var allowedOrigins = "localhost,127.0.0.1"
-var allowedMethods = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-var allowedHeaders = "Accept,Content-Type,Authorization"
+var allowedOrigins = os.Getenv("CORS_ALLOWED_ORIGINS")
+var allowedMethods = os.Getenv("CORS_ALLOWED_METHODS")
+var allowedHeaders = os.Getenv("CORS_ALLOWED_HEADERS")
 
 func isItAllowed(key string, allowed string) bool {
 	if allowed == "*" || allowed == "" {

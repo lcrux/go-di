@@ -1,9 +1,9 @@
 package services
 
 import (
+	customErrors "demo/custom-errors"
 	"demo/models"
 	"demo/repositories"
-	"fmt"
 	"time"
 )
 
@@ -31,16 +31,16 @@ func (s *todoServiceImpl) CreateTodo(todo *models.CreateTodoRequest) (models.Tod
 	var zero models.Todo
 
 	if todo == nil {
-		return zero, fmt.Errorf("todo is empty")
+		return zero, customErrors.NewValidationError("todo is empty")
 	}
 	if todo.Title == "" {
-		return zero, fmt.Errorf("todo title is empty")
+		return zero, customErrors.NewValidationError("todo title is empty")
 	}
 	if len(todo.Title) > 255 {
-		return zero, fmt.Errorf("todo title is too long, max length is 255 characters")
+		return zero, customErrors.NewValidationError("todo title is too long, max length is 255 characters")
 	}
 	if !todo.DueDate.IsZero() && todo.DueDate.Before(time.Now()) {
-		return zero, fmt.Errorf("todo due date is in the past")
+		return zero, customErrors.NewValidationError("todo due date is in the past")
 	}
 
 	return s.repo.CreateTodo(todo)
@@ -48,7 +48,7 @@ func (s *todoServiceImpl) CreateTodo(todo *models.CreateTodoRequest) (models.Tod
 
 func (s *todoServiceImpl) CloseTodo(id uint32) (models.Todo, error) {
 	if id == 0 {
-		return models.Todo{}, fmt.Errorf("invalid todo id")
+		return models.Todo{}, customErrors.NewValidationError("invalid todo id")
 	}
 
 	return s.repo.CloseTodo(id)
