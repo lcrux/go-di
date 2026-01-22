@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"demo/core"
+	customErrors "demo/custom-errors"
 	"demo/models"
 	"demo/services"
 	"encoding/json"
@@ -44,13 +45,13 @@ func (c *todoControllerImpl) GetTodos(w http.ResponseWriter, r *http.Request) {
 	todos, err := c.todoService.GetTodos()
 	if err != nil {
 		log.Printf("Error getting todos: %v", err)
-		http.Error(w, "Failed to get todos", http.StatusInternalServerError)
+		handleCustomError(w, err)
 		return
 	}
 
 	if err := json.NewEncoder(w).Encode(todos); err != nil {
 		log.Printf("Error encoding todos: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		handleCustomError(w, err)
 		return
 	}
 }
@@ -65,8 +66,7 @@ func (c *todoControllerImpl) CreateTodo(w http.ResponseWriter, r *http.Request) 
 
 	newTodo, err := c.todoService.CreateTodo(&todo)
 	if err != nil {
-		log.Printf("Error creating todo: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		handleCustomError(w, err)
 		return
 	}
 
@@ -102,14 +102,29 @@ func (c *todoControllerImpl) CloseTodo(w http.ResponseWriter, r *http.Request) {
 
 	updatedTodo, err := c.todoService.CloseTodo(todo.ID)
 	if err != nil {
-		log.Printf("Error closing todo: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		handleCustomError(w, err)
 		return
 	}
 
 	if err := json.NewEncoder(w).Encode(updatedTodo); err != nil {
-		log.Printf("Error encoding todo: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Printf("Error encoding updated todo: %v", err)
+		handleCustomError(w, err)
 		return
 	}
+}
+
+func handleCustomError(w http.ResponseWriter, err error) {
+	log.Printf("Error: %v", err)
+
+	if _, ok := err.(*customErrors.NotFoundError); ok {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+
+	if _, ok := err.(*customErrors.ValidationError); ok {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }

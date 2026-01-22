@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	customErrors "demo/custom-errors"
 	"demo/models"
 	"fmt"
 	"sync"
@@ -50,7 +51,7 @@ func (r *TodoRepositoryImpl) CreateTodo(todo *models.CreateTodoRequest) (models.
 	defer todosMutex.Unlock()
 
 	if todo == nil {
-		return models.Todo{}, fmt.Errorf("todo is nil")
+		return models.Todo{}, customErrors.NewValidationError("todo data is missing")
 	}
 
 	newTodo := &models.Todo{
@@ -73,7 +74,7 @@ func (r *TodoRepositoryImpl) CloseTodo(id uint32) (models.Todo, error) {
 
 	todo, ok := todos[id]
 	if !ok {
-		return models.Todo{}, fmt.Errorf("todo not found")
+		return models.Todo{}, customErrors.NewNotFoundError("not found")
 	}
 
 	// Mark the todo as done
