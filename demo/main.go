@@ -2,6 +2,8 @@ package main
 
 import (
 	"demo/controllers"
+	"demo/core"
+	"demo/middlewares"
 	"demo/repositories"
 	"demo/services"
 	"log"
@@ -11,32 +13,27 @@ import (
 )
 
 func init() {
+	di.Register[core.ServerMuxRouter](core.NewServerMuxRouter, di.Singleton)
 	di.Register[controllers.TodoController](controllers.NewTodoController, di.Singleton)
 	di.Register[services.TodoService](services.NewTodoService, di.Transient)
 	di.Register[repositories.TodoRepository](repositories.NewTodoRepository, di.Singleton)
 }
 
 func main() {
-	r := http.NewServeMux()
+	r := core.NewServerMuxRouter()
 
 	todoController, err := di.Resolve[controllers.TodoController]()
 	if err != nil {
 		panic(err)
 	}
 
-	r.HandleFunc("PATCH /todos/{id}/done", todoController.CloseTodo)
-	r.HandleFunc("GET /todos", todoController.GetTodos)
-	r.HandleFunc("POST /todos", todoController.CreateTodo)
+	apiGroup := r.WithGroup("api")
+	todoController.RegisterRoutes(apiGroup, nil)
+
+	middleware := core.Chain(middlewares.LoggerMiddleware, middlewares.CorsMiddleware)
 
 	log.Println("Starting server on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", LoggerMiddleware(r)); err != nil {
+	if err := http.ListenAndServe(":8080", middleware(r.Handler())); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-}
-
-func LoggerMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Request: %s %s (source: %s)", r.Method, r.URL.Path, r.RemoteAddr)
-		next.ServeHTTP(w, r)
-	})
 }
