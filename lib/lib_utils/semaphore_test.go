@@ -1,4 +1,4 @@
-package libUtils
+package libutils
 
 import (
 	"sync"
