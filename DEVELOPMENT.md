@@ -13,9 +13,12 @@ This document provides guidelines for developers contributing to the `go-di` lib
 ### Package Structure
 
 - Organize code into logical packages:
-  - `lib/di/context.go`: Manages scoped instances.
-  - `lib/di/registry.go`: Handles service registration and resolution.
-  - `lib/di/utils.go`: Contains utility functions.
+  - `lib/di/container.go`: Service registration, dependency resolution, and container lifecycle.
+  - `lib/di/lifecycle_context.go`: Lifecycle scopes, context management, and cleanup.
+  - `lib/utils/debug_logger.go`: Debug logging utilities.
+  - `lib/utils/semaphore.go`: Concurrency helpers used for shutdown operations.
+  - `lib/utils/types.go`: Generic type utilities for reflection.
+  - `demo/`: Example application demonstrating container usage.
 - Keep package responsibilities focused and cohesive.
 
 ### Commenting Standards
@@ -24,8 +27,8 @@ This document provides guidelines for developers contributing to the `go-di` lib
 - Example:
 
   ```go
-  // Register adds a service to the registry with the specified lifetime.
-  func Register[T any](factory func() T, lifetime Lifetime) {
+  // Register adds a service to a container with the specified lifecycle scope.
+  func Register[T any](c Container, factoryFn interface{}, scope LifecycleScope) error {
       // Implementation...
   }
   ```
@@ -33,6 +36,7 @@ This document provides guidelines for developers contributing to the `go-di` lib
 ### Error Handling
 
 - Avoid using `panic` in library code.
+- Prefer returning descriptive errors and log with `utils.DebugLog` where helpful.
 - Use `errors.Is` and `errors.As` for error wrapping and unwrapping.
 - Return descriptive error messages.
 
@@ -102,3 +106,20 @@ golangci-lint run
 ### Configuration
 
 The linting rules are defined in the `.golangci.yml` file. Ensure your code adheres to these rules before submitting changes.
+
+## Workspace and Modules
+
+This repository uses a Go workspace for local development.
+
+- `go.work` includes `./lib` and `./demo`.
+- The library module is rooted at `lib/go.mod`.
+- The demo app module is rooted at `demo/go.mod`.
+
+## Running Tests
+
+Run module tests from the repository root:
+
+```bash
+go test ./lib/...
+go test ./demo/...
+```

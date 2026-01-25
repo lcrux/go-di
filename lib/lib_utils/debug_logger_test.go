@@ -1,4 +1,4 @@
-package di
+package libutils
 
 import (
 	"log"
@@ -27,6 +27,23 @@ func TestDebugLog(t *testing.T) {
 
 	if strings.Trim(logOutput.lastMessage, "\n") != "Test message: 42" {
 		t.Fatalf("Expected 'Test message: 42', got '%s'", logOutput.lastMessage)
+	}
+}
+
+func TestDebugLog_Disabled(t *testing.T) {
+	os.Unsetenv("GODI_DEBUG")
+
+	logOutput := &mockWriter{}
+	log.SetOutput(logOutput)
+	defer log.SetOutput(os.Stderr)
+
+	log.SetFlags(0)
+	defer log.SetFlags(log.LstdFlags)
+
+	DebugLog("Should not log")
+
+	if strings.Trim(logOutput.lastMessage, "\n") != "" {
+		t.Fatalf("Expected no log output when disabled, got '%s'", logOutput.lastMessage)
 	}
 }
 
