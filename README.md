@@ -28,7 +28,7 @@ The `go-di` project is a lightweight and flexible dependency injection library f
 To use `go-di`, add it to your Go module:
 
 ```bash
-go get github.com/lcrux/go-di
+go get github.com/lcrux/go-di/di
 ```
 
 ## Getting Started
