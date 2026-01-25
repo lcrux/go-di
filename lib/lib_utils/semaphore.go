@@ -1,4 +1,4 @@
-package utils
+package libUtils
 
 const defaultSemaphoreCapacity = 5
 

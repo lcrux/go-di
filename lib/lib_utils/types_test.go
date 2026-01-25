@@ -1,4 +1,4 @@
-package utils
+package libUtils
 
 import (
 	"reflect"
@@ -26,8 +26,8 @@ func TestTypeOf_Alias(t *testing.T) {
 
 func TestNameOf_CustomType(t *testing.T) {
 	got := NameOf[sample]()
-	if got != "github.com/lcrux/go-di/utils/sample" {
-		t.Fatalf("expected github.com/lcrux/go-di/utils/sample, got %s", got)
+	if got != "github.com/lcrux/go-di/lib_utils/sample" {
+		t.Fatalf("expected github.com/lcrux/go-di/lib_utils/sample, got %s", got)
 	}
 }
 

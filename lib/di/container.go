@@ -5,10 +5,10 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/lcrux/go-di/utils"
+	libUtils "github.com/lcrux/go-di/lib_utils"
 )
 
-const BACKGROUND_CONTEXT_KEY = "BACKGROUND_CONTEXT_KEY"
+const backgroundContextKey = "BACKGROUND_CONTEXT_KEY"
 
 // Resolve resolves a service of type T from the container using the provided lifecycle context.
 // If the context is nil, it uses the container's background context.
@@ -28,10 +28,10 @@ func Resolve[T any](c Container, ctx LifecycleContext) T {
 		ctx = c.BackgroundContext()
 	}
 
-	serviceType := utils.TypeOf[T]()
+	serviceType := libUtils.TypeOf[T]()
 	inst, err := c.Resolve(serviceType, ctx)
 	if err != nil {
-		utils.DebugLog("[Container] Error resolving service of type: %v, error: %v", serviceType, err)
+		libUtils.DebugLog("[Container] Error resolving service of type: %v, error: %v", serviceType, err)
 		panic(fmt.Sprintf("failed to resolve service of type: %v, error: %v", serviceType, err))
 	}
 	return inst.(T)
@@ -42,7 +42,7 @@ func Resolve[T any](c Container, ctx LifecycleContext) T {
 // The factory function must be a function that returns exactly one value of type T.
 // The scope determines the lifetime of the service instance (Transient, Singleton, Scoped).
 func Register[T any](c Container, factoryFn interface{}, scope LifecycleScope) error {
-	return c.Register(utils.TypeOf[T](), factoryFn, scope)
+	return c.Register(libUtils.TypeOf[T](), factoryFn, scope)
 }
 
 type Container interface {
@@ -68,7 +68,7 @@ func NewContainer() Container {
 		lifecycleContexts: make(map[string]LifecycleContext),
 		mutex:             sync.RWMutex{},
 	}
-	container.lifecycleContexts[BACKGROUND_CONTEXT_KEY] = NewLifecycleContext()
+	container.lifecycleContexts[backgroundContextKey] = NewLifecycleContext()
 	return container
 }
 
@@ -89,7 +89,7 @@ func (c *containerImpl) NewContext() LifecycleContext {
 func (c *containerImpl) BackgroundContext() LifecycleContext {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	return c.lifecycleContexts[BACKGROUND_CONTEXT_KEY]
+	return c.lifecycleContexts[backgroundContextKey]
 }
 
 func (c *containerImpl) CloseContext(ctx LifecycleContext) []error {
@@ -100,7 +100,7 @@ func (c *containerImpl) CloseContext(ctx LifecycleContext) []error {
 }
 
 func (c *containerImpl) Shutdown() []error {
-	semaphore := utils.NewSemaphore(10)
+	semaphore := libUtils.NewSemaphore(10)
 	defer semaphore.Done()
 
 	wg := sync.WaitGroup{}
@@ -136,7 +136,7 @@ func (c *containerImpl) Shutdown() []error {
 	// Reset the lifecycle contexts after shutdown, keeps a clean background context to avoid nil references
 	c.mutex.Lock()
 	c.lifecycleContexts = make(map[string]LifecycleContext)
-	c.lifecycleContexts[BACKGROUND_CONTEXT_KEY] = NewLifecycleContext()
+	c.lifecycleContexts[backgroundContextKey] = NewLifecycleContext()
 	c.mutex.Unlock()
 
 	return allErrors
@@ -185,7 +185,7 @@ func (c *containerImpl) Register(serviceType reflect.Type, factoryFn interface{}
 		entry.factoryFnParams[i] = factoryFnType.In(i)
 	}
 
-	utils.DebugLog("Registered service: %s with scope: %v", serviceType.String(), scope)
+	libUtils.DebugLog("Registered service: %s with scope: %v", serviceType.String(), scope)
 	return nil
 }
 
@@ -195,7 +195,7 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 	}
 	var zero interface{}
 
-	utils.DebugLog("Resolving service: %s", serviceType.String())
+	libUtils.DebugLog("Resolving service: %s", serviceType.String())
 
 	// Check if the service is registered
 	c.mutex.RLock()
@@ -211,7 +211,7 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 		return zero, fmt.Errorf("failed to get dependency tree for %s: %w", serviceType.String(), err)
 	}
 
-	utils.DebugLog("Dependencies for service %s: %v", serviceType.String(), dependencies)
+	libUtils.DebugLog("Dependencies for service %s: %v", serviceType.String(), dependencies)
 
 	// Resolve the dependencies for the service
 	resolved, err := c.resolveDependencies(dependencies, ctx)
@@ -225,7 +225,7 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 		return zero, fmt.Errorf("failed to resolve service: %s", serviceType.String())
 	}
 
-	utils.DebugLog("Successfully resolved service: %s", serviceType.String())
+	libUtils.DebugLog("Successfully resolved service: %s", serviceType.String())
 	return value.Interface(), nil
 }
 
@@ -276,7 +276,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			return nil, fmt.Errorf("service not found: %s", depType.String())
 		}
 
-		utils.DebugLog("Resolving dependency: %s", depType.String())
+		libUtils.DebugLog("Resolving dependency: %s", depType.String())
 		// Resolve the current dependency within a locked context to ensure thread safety
 		instance, err := func() (reflect.Value, error) {
 			if entry.scope == Singleton || entry.scope == Scoped {
@@ -288,7 +288,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			// Check if the instance is already cached for Singleton or Scoped scope
 			cached, ok := c.loadInstance(ctx, entry)
 			if ok {
-				utils.DebugLog("Using cached instance for: %s", depType.String())
+				libUtils.DebugLog("Using cached instance for: %s", depType.String())
 				return cached, nil
 			}
 
@@ -318,7 +318,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			// Persist the created instance based on its lifecycle scope
 			c.persistInstance(ctx, entry, instance)
 
-			utils.DebugLog("Created new instance for: %s", depType.String())
+			libUtils.DebugLog("Created new instance for: %s", depType.String())
 
 			return instance, nil
 		}()
