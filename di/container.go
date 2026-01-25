@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync"
 
-	libutils "github.com/lcrux/go-di/lib_utils"
+	libutils "github.com/lcrux/go-di/di/lib_utils"
 )
 
 const backgroundContextKey = "BACKGROUND_CONTEXT_KEY"
