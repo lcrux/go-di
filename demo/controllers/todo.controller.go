@@ -11,7 +11,7 @@ import (
 	"strconv"
 )
 
-func NewTodoController(router core.ServerMuxRouter, ts services.TodoService) TodoController {
+func NewTodoController(ts services.TodoService) TodoController {
 	return &todoControllerImpl{
 		todoService: ts,
 	}
@@ -28,16 +28,22 @@ type todoControllerImpl struct {
 	todoService services.TodoService
 }
 
-func (c *todoControllerImpl) RegisterRoutes(router core.ServerMuxRouter, middleware core.Middleware) {
+func (c *todoControllerImpl) RegisterRoutes(router core.ServerMuxRouter, middleware core.Middleware) error {
 	if middleware == nil {
 		middleware = core.PassThroughMiddleware
 	}
 
-	groupRouter := router.WithGroup("/todos")
-
-	groupRouter.Patch("/{id}/done", middleware(http.HandlerFunc(c.CloseTodo)))
-	groupRouter.Get("/", middleware(http.HandlerFunc(c.GetTodos)))
-	groupRouter.Post("/", middleware(http.HandlerFunc(c.CreateTodo)))
+	todosGroup := router.Group("/todos")
+	if err := todosGroup.AddPatch("/{id}/done/", middleware(http.HandlerFunc(c.CloseTodo))); err != nil {
+		return err
+	}
+	if err := todosGroup.AddGet("/", middleware(http.HandlerFunc(c.GetTodos))); err != nil {
+		return err
+	}
+	if err := todosGroup.AddPost("/", middleware(http.HandlerFunc(c.CreateTodo))); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *todoControllerImpl) GetTodos(w http.ResponseWriter, r *http.Request) {

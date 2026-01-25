@@ -1,0 +1,34 @@
+package utils
+
+const defaultSemaphoreCapacity = 5
+
+// Semaphore is a simple semaphore implementation.
+type Semaphore struct {
+	ch chan struct{}
+}
+
+// NewSemaphore creates a new semaphore with the given capacity.
+// If the capacity is less than or equal to 0, it defaults to 5.
+func NewSemaphore(capacity int) *Semaphore {
+	if capacity <= 0 {
+		capacity = defaultSemaphoreCapacity
+	}
+	return &Semaphore{
+		ch: make(chan struct{}, capacity),
+	}
+}
+
+// Acquire acquires a slot in the semaphore, blocking if necessary.
+func (s *Semaphore) Acquire() {
+	s.ch <- struct{}{}
+}
+
+// Release releases a slot in the semaphore.
+func (s *Semaphore) Release() {
+	<-s.ch
+}
+
+// Done closes the semaphore channel, releasing all resources.
+func (s *Semaphore) Done() {
+	close(s.ch)
+}

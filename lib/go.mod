@@ -1,4 +1,4 @@
-module github.com/lcrux/go-di/v0
+module github.com/lcrux/go-di
 
 go 1.25.4
 

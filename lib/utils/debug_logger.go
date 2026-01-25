@@ -1,4 +1,4 @@
-package di
+package utils
 
 import (
 	"log"
