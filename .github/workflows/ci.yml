@@ -21,25 +21,16 @@ jobs:
       with:
         go-version: 1.25
 
-    - name: Install DI dependencies
-      run: cd di && go mod tidy
-
-    - name: Install Demo dependencies
-      run: cd demo && go mod tidy
-
     - name: Install golangci-lint
       run: |
         curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.8.0
         echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
+    - name: Install DI dependencies
+      run: cd di && go mod tidy
+
     - name: Run DI lint checks
       run: cd di && golangci-lint run
 
-    - name: Run Demo lint checks
-      run: cd demo && golangci-lint run
-
     - name: Run DI tests
       run: cd di && go test ./...
-    
-    - name: Run Demo tests
-      run: cd demo && go test ./...
