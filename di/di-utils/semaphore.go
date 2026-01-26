@@ -1,4 +1,4 @@
-package libutils
+package diUtils
 
 const defaultSemaphoreCapacity = 5
 

@@ -1,4 +1,4 @@
-package libutils
+package diUtils
 
 import (
 	"fmt"

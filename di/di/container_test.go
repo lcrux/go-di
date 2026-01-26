@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	libutils "github.com/lcrux/go-di/lib_utils"
+	diUtils "github.com/lcrux/go-di/di-utils"
 )
 
 type depA struct {
@@ -187,19 +187,19 @@ func TestContainer_RegisterValidation(t *testing.T) {
 		t.Fatal("expected error for nil serviceType")
 	}
 
-	if err := c.Register(libutils.TypeOf[*depA](), nil, Transient); err == nil {
+	if err := c.Register(diUtils.TypeOf[*depA](), nil, Transient); err == nil {
 		t.Fatal("expected error for nil factoryFn")
 	}
 
-	if err := c.Register(libutils.TypeOf[*depA](), 42, Transient); err == nil {
+	if err := c.Register(diUtils.TypeOf[*depA](), 42, Transient); err == nil {
 		t.Fatal("expected error for non-function factoryFn")
 	}
 
-	if err := c.Register(libutils.TypeOf[*depA](), func() (*depA, error) { return &depA{}, nil }, Transient); err == nil {
+	if err := c.Register(diUtils.TypeOf[*depA](), func() (*depA, error) { return &depA{}, nil }, Transient); err == nil {
 		t.Fatal("expected error for invalid return count")
 	}
 
-	if err := c.Register(libutils.TypeOf[*depA](), func() *depB { return &depB{} }, Transient); err == nil {
+	if err := c.Register(diUtils.TypeOf[*depA](), func() *depB { return &depB{} }, Transient); err == nil {
 		t.Fatal("expected error for mismatched return type")
 	}
 

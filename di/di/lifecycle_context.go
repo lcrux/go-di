@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	libutils "github.com/lcrux/go-di/lib_utils"
+	diUtils "github.com/lcrux/go-di/di-utils"
 )
 
 // LifecycleScope defines the lifetime of a service instance.
@@ -30,7 +30,7 @@ type LifecycleListener interface {
 // It allows storing and retrieving instances of services by their type within the context.
 // Once the context is closed, all stored instances are cleaned up and cannot be retrieved.
 func NewLifecycleContext() LifecycleContext {
-	libutils.DebugLog("Creating new lifecycle context")
+	diUtils.DebugLog("Creating new lifecycle context")
 	ctx := &lifecycleContextImpl{
 		id:    uuid.New().String(),
 		cache: make(map[reflect.Type]reflect.Value),
@@ -61,10 +61,10 @@ func (ctx *lifecycleContextImpl) ID() string {
 // Shutdown cleans up all scoped instances in the context.
 // Logs the operation and confirms the context has been closed.
 func (ctx *lifecycleContextImpl) Shutdown() []error {
-	libutils.DebugLog("[Context ID: %s] Closing lifecycle context...", ctx.ID())
+	diUtils.DebugLog("[Context ID: %s] Closing lifecycle context...", ctx.ID())
 
 	// Use a semaphore to limit the number of concurrent EndLifecycle calls
-	semaphore := libutils.NewSemaphore(10)
+	semaphore := diUtils.NewSemaphore(10)
 	defer semaphore.Done()
 
 	var errors []error
@@ -79,7 +79,7 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 	}
 	ctx.mutex.RUnlock()
 	for _, k := range cacheKeys {
-		libutils.DebugLog("[Context ID: %s] Deleting instance for service type: %v", ctx.ID(), k)
+		diUtils.DebugLog("[Context ID: %s] Deleting instance for service type: %v", ctx.ID(), k)
 
 		// Acquire a read lock to safely access the cache
 		ctx.mutex.RLock()
@@ -106,16 +106,16 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 			defer semaphore.Release()
 			defer func() {
 				if r := recover(); r != nil {
-					libutils.DebugLog("[Context ID: %s] Recovered from panic in EndLifecycle for service type: %v, panic: %v", ctx.ID(), k, r)
+					diUtils.DebugLog("[Context ID: %s] Recovered from panic in EndLifecycle for service type: %v, panic: %v", ctx.ID(), k, r)
 
 					errorsMux.Lock()
 					errors = append(errors, fmt.Errorf("panic in EndLifecycle for service type: %v, panic: %v", k, r))
 					errorsMux.Unlock()
 				}
 			}()
-			libutils.DebugLog("[Context ID: %s] Ending lifecycle for service type: %v...", ctx.ID(), k)
+			diUtils.DebugLog("[Context ID: %s] Ending lifecycle for service type: %v...", ctx.ID(), k)
 			if err := lm.EndLifecycle(); err != nil {
-				libutils.DebugLog("[Context ID: %s] Error ending lifecycle for service type: %v, error: %v", ctx.ID(), k, err)
+				diUtils.DebugLog("[Context ID: %s] Error ending lifecycle for service type: %v, error: %v", ctx.ID(), k, err)
 
 				errorsMux.Lock()
 				errors = append(
@@ -125,7 +125,7 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 				errorsMux.Unlock()
 			} else {
 				// Remove the instance from the cache
-				libutils.DebugLog("[Context ID: %s] Removing instance for service type: %v", ctx.ID(), k)
+				diUtils.DebugLog("[Context ID: %s] Removing instance for service type: %v", ctx.ID(), k)
 				ctx.mutex.Lock()
 				delete(ctx.cache, k)
 				ctx.mutex.Unlock()
@@ -133,7 +133,7 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 		}(lm, k, ctx)
 	}
 	wg.Wait() // Wait for all EndLifecycle calls to complete
-	libutils.DebugLog("[Context ID: %s] Lifecycle context closed", ctx.ID())
+	diUtils.DebugLog("[Context ID: %s] Lifecycle context closed", ctx.ID())
 	return errors
 }
 
@@ -143,12 +143,12 @@ func (ctx *lifecycleContextImpl) GetInstance(serviceType reflect.Type) (reflect.
 	ctx.mutex.RLock()
 	defer ctx.mutex.RUnlock()
 
-	libutils.DebugLog("[Context ID: %s] Getting instance for service type: %v", ctx.ID(), serviceType)
+	diUtils.DebugLog("[Context ID: %s] Getting instance for service type: %v", ctx.ID(), serviceType)
 	instance, exists := ctx.cache[serviceType]
 	if exists {
-		libutils.DebugLog("[Context ID: %s] Instance found for service type: %v", ctx.ID(), serviceType)
+		diUtils.DebugLog("[Context ID: %s] Instance found for service type: %v", ctx.ID(), serviceType)
 	} else {
-		libutils.DebugLog("[Context ID: %s] No instance found for service type: %v", ctx.ID(), serviceType)
+		diUtils.DebugLog("[Context ID: %s] No instance found for service type: %v", ctx.ID(), serviceType)
 	}
 
 	return instance, exists
@@ -162,10 +162,10 @@ func (ctx *lifecycleContextImpl) SetInstance(serviceType reflect.Type, instance 
 	ctx.mutex.Lock()
 	defer ctx.mutex.Unlock()
 
-	libutils.DebugLog("[Context ID: %s] Setting instance for service type: %v", ctx.ID(), serviceType)
+	diUtils.DebugLog("[Context ID: %s] Setting instance for service type: %v", ctx.ID(), serviceType)
 	if _, exists := ctx.cache[serviceType]; exists {
-		libutils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", ctx.ID(), serviceType)
+		diUtils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", ctx.ID(), serviceType)
 	}
 	ctx.cache[serviceType] = instance
-	libutils.DebugLog("[Context ID: %s] Instance set for service type: %v", ctx.ID(), serviceType)
+	diUtils.DebugLog("[Context ID: %s] Instance set for service type: %v", ctx.ID(), serviceType)
 }
