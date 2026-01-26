@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync"
 
-	diUtils "github.com/lcrux/go-di/di-utils"
+	diutils "github.com/lcrux/go-di/di-utils"
 )
 
 const backgroundContextKey = "BACKGROUND_CONTEXT_KEY"
@@ -28,10 +28,10 @@ func Resolve[T any](c Container, ctx LifecycleContext) T {
 		ctx = c.BackgroundContext()
 	}
 
-	serviceType := diUtils.TypeOf[T]()
+	serviceType := diutils.TypeOf[T]()
 	inst, err := c.Resolve(serviceType, ctx)
 	if err != nil {
-		diUtils.DebugLog("[Container] Error resolving service of type: %v, error: %v", serviceType, err)
+		diutils.DebugLog("[Container] Error resolving service of type: %v, error: %v", serviceType, err)
 		panic(fmt.Sprintf("failed to resolve service of type: %v, error: %v", serviceType, err))
 	}
 	return inst.(T)
@@ -42,7 +42,7 @@ func Resolve[T any](c Container, ctx LifecycleContext) T {
 // The factory function must be a function that returns exactly one value of type T.
 // The scope determines the lifetime of the service instance (Transient, Singleton, Scoped).
 func Register[T any](c Container, factoryFn interface{}, scope LifecycleScope) error {
-	return c.Register(diUtils.TypeOf[T](), factoryFn, scope)
+	return c.Register(diutils.TypeOf[T](), factoryFn, scope)
 }
 
 type Container interface {
@@ -100,7 +100,7 @@ func (c *containerImpl) CloseContext(ctx LifecycleContext) []error {
 }
 
 func (c *containerImpl) Shutdown() []error {
-	semaphore := diUtils.NewSemaphore(10)
+	semaphore := diutils.NewSemaphore(10)
 	defer semaphore.Done()
 
 	wg := sync.WaitGroup{}
@@ -185,7 +185,7 @@ func (c *containerImpl) Register(serviceType reflect.Type, factoryFn interface{}
 		entry.factoryFnParams[i] = factoryFnType.In(i)
 	}
 
-	diUtils.DebugLog("Registered service: %s with scope: %v", serviceType.String(), scope)
+	diutils.DebugLog("Registered service: %s with scope: %v", serviceType.String(), scope)
 	return nil
 }
 
@@ -195,7 +195,7 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 	}
 	var zero interface{}
 
-	diUtils.DebugLog("Resolving service: %s", serviceType.String())
+	diutils.DebugLog("Resolving service: %s", serviceType.String())
 
 	// Check if the service is registered
 	c.mutex.RLock()
@@ -211,7 +211,7 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 		return zero, fmt.Errorf("failed to get dependency tree for %s: %w", serviceType.String(), err)
 	}
 
-	diUtils.DebugLog("Dependencies for service %s: %v", serviceType.String(), dependencies)
+	diutils.DebugLog("Dependencies for service %s: %v", serviceType.String(), dependencies)
 
 	// Resolve the dependencies for the service
 	resolved, err := c.resolveDependencies(dependencies, ctx)
@@ -225,7 +225,7 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 		return zero, fmt.Errorf("failed to resolve service: %s", serviceType.String())
 	}
 
-	diUtils.DebugLog("Successfully resolved service: %s", serviceType.String())
+	diutils.DebugLog("Successfully resolved service: %s", serviceType.String())
 	return value.Interface(), nil
 }
 
@@ -276,7 +276,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			return nil, fmt.Errorf("service not found: %s", depType.String())
 		}
 
-		diUtils.DebugLog("Resolving dependency: %s", depType.String())
+		diutils.DebugLog("Resolving dependency: %s", depType.String())
 		// Resolve the current dependency within a locked context to ensure thread safety
 		instance, err := func() (reflect.Value, error) {
 			if entry.scope == Singleton || entry.scope == Scoped {
@@ -288,7 +288,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			// Check if the instance is already cached for Singleton or Scoped scope
 			cached, ok := c.loadInstance(ctx, entry)
 			if ok {
-				diUtils.DebugLog("Using cached instance for: %s", depType.String())
+				diutils.DebugLog("Using cached instance for: %s", depType.String())
 				return cached, nil
 			}
 
@@ -318,7 +318,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			// Persist the created instance based on its lifecycle scope
 			c.persistInstance(ctx, entry, instance)
 
-			diUtils.DebugLog("Created new instance for: %s", depType.String())
+			diutils.DebugLog("Created new instance for: %s", depType.String())
 
 			return instance, nil
 		}()

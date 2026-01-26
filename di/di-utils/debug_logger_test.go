@@ -1,4 +1,4 @@
-package diUtils
+package diutils
 
 import (
 	"log"
