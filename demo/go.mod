@@ -6,3 +6,5 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 )
+
+require github.com/lcrux/go-di v1.2.0 // indirect
