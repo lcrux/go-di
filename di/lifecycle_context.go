@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	diutils "github.com/lcrux/go-di/di-utils"
+	diutils "github.com/lcrux/go-di/di/di-utils"
 )
 
 // LifecycleScope defines the lifetime of a service instance.

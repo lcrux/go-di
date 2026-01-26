@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	diutils "github.com/lcrux/go-di/di-utils"
+	diutils "github.com/lcrux/go-di/di/di-utils"
 )
 
 type depA struct {
