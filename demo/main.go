@@ -27,26 +27,31 @@ func main() {
 	}
 
 	// Register dependencies
-	if err := registerRoutes(container); err != nil {
-		log.Fatalf("Failed to register routes: %v", err)
+	if err := registerServices(container); err != nil {
+		log.Fatalf("Failed to register services: %v", err)
 	}
 
+	// Resolve the TodoController
 	todoController := di.Resolve[controllers.TodoController](container, nil)
 	if todoController == nil {
 		panic("failed to resolve TodoController")
 	}
 
+	// Add the TodoController to the API router
 	apiRouter := r.Group("api")
 	if err := apiRouter.AddController(todoController, nil); err != nil {
 		log.Fatalf("Failed to add controller to API router: %v", err)
 	}
 
+	// Create a new lifecycle context and resolve the TodoController within that context
 	cctx := container.NewContext()
+	// Resolve the TodoController within the new lifecycle context
 	todoController2 := di.Resolve[controllers.TodoController](container, cctx)
 	if todoController2 == nil {
 		panic("failed to resolve TodoController with lifecycle context")
 	}
 
+	// Add the TodoController to the API2 router
 	api2Router := r.Group("api2")
 	if err := api2Router.AddController(todoController2, nil); err != nil {
 		log.Fatalf("Failed to add controller to API2 router: %v", err)
@@ -54,9 +59,9 @@ func main() {
 
 	// Chain middlewares
 	middleware := core.Chain(
-		middlewares.NormalizeTrailingSlashMiddleware,
-		middlewares.LoggerMiddleware,
 		middlewares.CorsMiddleware,
+		middlewares.LoggerMiddleware,
+		middlewares.NormalizeTrailingSlashMiddleware,
 	)
 
 	server := &http.Server{
@@ -85,7 +90,7 @@ func main() {
 	}
 }
 
-func registerRoutes(container di.Container) error {
+func registerServices(container di.Container) error {
 	if err := di.Register[controllers.TodoController](container, controllers.NewTodoController, di.Scoped); err != nil {
 		return fmt.Errorf("Failed to register TodoController: %v", err)
 	}
