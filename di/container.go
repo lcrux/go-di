@@ -64,7 +64,7 @@ type containerEntry struct {
 
 func NewContainer() Container {
 	container := &containerImpl{
-		registry:          make(map[reflect.Type]*containerEntry),
+		registry:          make(map[string]*containerEntry),
 		lifecycleContexts: make(map[string]LifecycleContext),
 		mutex:             sync.RWMutex{},
 	}
@@ -73,7 +73,7 @@ func NewContainer() Container {
 }
 
 type containerImpl struct {
-	registry          map[reflect.Type]*containerEntry
+	registry          map[string]*containerEntry
 	mutex             sync.RWMutex
 	lifecycleContexts map[string]LifecycleContext
 }
@@ -153,7 +153,8 @@ func (c *containerImpl) Register(serviceType reflect.Type, factoryFn interface{}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if _, exists := c.registry[serviceType]; exists {
+	registryKey := diutils.NameOfType(serviceType)
+	if _, exists := c.registry[registryKey]; exists {
 		return fmt.Errorf("service already registered: %s", serviceType.String())
 	}
 
@@ -178,7 +179,7 @@ func (c *containerImpl) Register(serviceType reflect.Type, factoryFn interface{}
 		factoryFnParams: make([]reflect.Type, factoryFnType.NumIn()),
 		scope:           scope,
 	}
-	c.registry[serviceType] = entry
+	c.registry[registryKey] = entry
 
 	// Store the parameter types of the factory function
 	for i := 0; i < factoryFnType.NumIn(); i++ {
@@ -199,7 +200,8 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 
 	// Check if the service is registered
 	c.mutex.RLock()
-	_, exists := c.registry[serviceType]
+	registryKey := diutils.NameOfType(serviceType)
+	_, exists := c.registry[registryKey]
 	c.mutex.RUnlock()
 	if !exists {
 		return zero, fmt.Errorf("service not registered: %s", serviceType.String())
@@ -244,7 +246,8 @@ func (c *containerImpl) getDependencyTree(serviceType reflect.Type) ([]reflect.T
 		}
 		visiting[t] = true
 		c.mutex.RLock()
-		entry, exists := c.registry[t]
+		registryKey := diutils.NameOfType(t)
+		entry, exists := c.registry[registryKey]
 		c.mutex.RUnlock()
 		if !exists {
 			return fmt.Errorf("service not found: %s", t.String())
@@ -270,7 +273,8 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 	for _, depType := range dependencies {
 		// Retrieve the container entry for the current dependency
 		c.mutex.RLock()
-		entry, exists := c.registry[depType]
+		registryKey := diutils.NameOfType(depType)
+		entry, exists := c.registry[registryKey]
 		c.mutex.RUnlock()
 		if !exists {
 			return nil, fmt.Errorf("service not found: %s", depType.String())
