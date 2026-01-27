@@ -13,5 +13,29 @@ func TypeOf[T interface{}]() reflect.Type {
 // NameOf returns the fully qualified name of a generic type T.
 func NameOf[T interface{}]() string {
 	to := TypeOf[T]()
-	return fmt.Sprintf("%s/%s", to.PkgPath(), to.Name())
+	return NameOfType(to)
+}
+
+// NameOfType returns the fully qualified name of a reflect.Type.
+func NameOfType(t reflect.Type) string {
+	var pkgPath string
+	var tName string
+
+	if t.Kind() == reflect.Ptr {
+		pkgPath = t.Elem().PkgPath()
+		tName = t.Elem().Name()
+	} else {
+		pkgPath = t.PkgPath()
+		tName = t.Name()
+	}
+
+	if tName == "" {
+		return t.String()
+	}
+
+	if pkgPath == "" {
+		return tName
+	}
+
+	return fmt.Sprintf("%s/%s", pkgPath, tName)
 }

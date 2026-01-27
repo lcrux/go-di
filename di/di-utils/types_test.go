@@ -33,7 +33,7 @@ func TestNameOf_CustomType(t *testing.T) {
 
 func TestNameOf_Builtin(t *testing.T) {
 	got := NameOf[int]()
-	if got != "/int" {
-		t.Fatalf("expected /int, got %s", got)
+	if got != "int" {
+		t.Fatalf("expected int, got %s", got)
 	}
 }

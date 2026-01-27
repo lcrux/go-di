@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
+
+	diutils "github.com/lcrux/go-di/di/di-utils"
 )
 
 func TestNewLifecycleContext(t *testing.T) {
@@ -39,10 +41,11 @@ func (l *listenerPanic) EndLifecycle() error {
 func TestLifecycleContext_SetAndGetInstance(t *testing.T) {
 	ctx := NewLifecycleContext()
 	serviceType := reflect.TypeOf("")
+	key := diutils.NameOfType(serviceType)
 	expected := reflect.ValueOf("test-instance")
 
-	ctx.SetInstance(serviceType, expected)
-	val, exists := ctx.GetInstance(serviceType)
+	ctx.SetInstance(key, expected)
+	val, exists := ctx.GetInstance(key)
 
 	if !exists {
 		t.Fatal("Expected instance to exist")
@@ -56,12 +59,13 @@ func TestLifecycleContext_SetAndGetInstance(t *testing.T) {
 func TestLifecycleContext_SetInstance_Overwrite(t *testing.T) {
 	ctx := NewLifecycleContext()
 	serviceType := reflect.TypeOf("")
+	key := diutils.NameOfType(serviceType)
 	first := reflect.ValueOf("first")
 	second := reflect.ValueOf("second")
 
-	ctx.SetInstance(serviceType, first)
-	ctx.SetInstance(serviceType, second)
-	val, exists := ctx.GetInstance(serviceType)
+	ctx.SetInstance(key, first)
+	ctx.SetInstance(key, second)
+	val, exists := ctx.GetInstance(key)
 
 	if !exists {
 		t.Fatal("Expected instance to exist")
@@ -74,12 +78,13 @@ func TestLifecycleContext_SetInstance_Overwrite(t *testing.T) {
 func TestLifecycleContext_Shutdown_RemovesNonListenerInstances(t *testing.T) {
 	ctx := NewLifecycleContext()
 	serviceType := reflect.TypeOf("")
+	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf("test-instance")
 
-	ctx.SetInstance(serviceType, instance)
+	ctx.SetInstance(key, instance)
 	ctx.Shutdown()
 
-	_, exists := ctx.GetInstance(serviceType)
+	_, exists := ctx.GetInstance(key)
 	if exists {
 		t.Fatal("Expected instance to be cleaned up after Shutdown")
 	}
@@ -89,9 +94,10 @@ func TestLifecycleContext_Shutdown_InvokesLifecycleListener(t *testing.T) {
 	ctx := NewLifecycleContext()
 	called := int32(0)
 	serviceType := reflect.TypeOf(&listenerOk{})
+	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerOk{called: &called})
 
-	ctx.SetInstance(serviceType, instance)
+	ctx.SetInstance(key, instance)
 	errs := ctx.Shutdown()
 
 	if len(errs) != 0 {
@@ -101,7 +107,7 @@ func TestLifecycleContext_Shutdown_InvokesLifecycleListener(t *testing.T) {
 		t.Fatalf("Expected EndLifecycle to be called once, got %d", called)
 	}
 
-	_, exists := ctx.GetInstance(serviceType)
+	_, exists := ctx.GetInstance(key)
 	if exists {
 		t.Fatal("Expected listener instance to be removed after Shutdown")
 	}
@@ -110,9 +116,10 @@ func TestLifecycleContext_Shutdown_InvokesLifecycleListener(t *testing.T) {
 func TestLifecycleContext_Shutdown_CollectsErrors(t *testing.T) {
 	ctx := NewLifecycleContext()
 	serviceType := reflect.TypeOf(&listenerErr{})
+	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerErr{})
 
-	ctx.SetInstance(serviceType, instance)
+	ctx.SetInstance(key, instance)
 	errs := ctx.Shutdown()
 
 	if len(errs) != 1 {
@@ -120,7 +127,7 @@ func TestLifecycleContext_Shutdown_CollectsErrors(t *testing.T) {
 	}
 
 	// Instance should remain in cache when EndLifecycle returns error
-	if _, exists := ctx.GetInstance(serviceType); !exists {
+	if _, exists := ctx.GetInstance(key); !exists {
 		t.Fatal("Expected instance to remain after EndLifecycle error")
 	}
 }
@@ -128,9 +135,10 @@ func TestLifecycleContext_Shutdown_CollectsErrors(t *testing.T) {
 func TestLifecycleContext_Shutdown_RecoversFromPanics(t *testing.T) {
 	ctx := NewLifecycleContext()
 	serviceType := reflect.TypeOf(&listenerPanic{})
+	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerPanic{})
 
-	ctx.SetInstance(serviceType, instance)
+	ctx.SetInstance(key, instance)
 	errs := ctx.Shutdown()
 
 	if len(errs) != 1 {
@@ -138,7 +146,7 @@ func TestLifecycleContext_Shutdown_RecoversFromPanics(t *testing.T) {
 	}
 
 	// Instance should remain in cache when EndLifecycle panics
-	if _, exists := ctx.GetInstance(serviceType); !exists {
+	if _, exists := ctx.GetInstance(key); !exists {
 		t.Fatal("Expected instance to remain after EndLifecycle panic")
 	}
 }

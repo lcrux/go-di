@@ -3,12 +3,16 @@ package di
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	diutils "github.com/lcrux/go-di/di/di-utils"
 )
 
 const backgroundContextKey = "BACKGROUND_CONTEXT_KEY"
+
+var containerReflectedKey string = diutils.NameOfType(diutils.TypeOf[Container]())
+var lifecycleContextReflectedKey = diutils.NameOfType(diutils.TypeOf[LifecycleContext]())
 
 // Resolve resolves a service of type T from the container using the provided lifecycle context.
 // If the context is nil, it uses the container's background context.
@@ -19,8 +23,32 @@ const backgroundContextKey = "BACKGROUND_CONTEXT_KEY"
 //
 // LifecycleContext: The lifecycle context to use for resolving the service. If nil, the container's background context is used.
 func Resolve[T any](c Container, ctx LifecycleContext) T {
+	// Get the type of the service to resolve and its registry key
+	serviceType := diutils.TypeOf[T]()
+	key := diutils.NameOfType(serviceType)
+
+	// Resolve the service using the registry key and the provided context
+	instance := ResolveWithKey[T](c, key, ctx)
+
+	return instance
+}
+
+// ResolveWithKey resolves a service of type T from the container using the provided key and lifecycle context.
+// If the context is nil, it uses the container's background context.
+//
+// Parameters:
+//
+// Container: The container instance from which to resolve the service.
+//
+// Key: The key associated with the service to resolve.
+//
+// LifecycleContext: The lifecycle context to use for resolving the service. If nil, the container's background context is used.
+func ResolveWithKey[T any](c Container, key string, ctx LifecycleContext) T {
 	if c == nil {
 		panic("container cannot be nil")
+	}
+	if strings.TrimSpace(key) == "" {
+		panic("key cannot be empty")
 	}
 
 	// If the provided context is nil, use the container's background context
@@ -28,34 +56,81 @@ func Resolve[T any](c Container, ctx LifecycleContext) T {
 		ctx = c.BackgroundContext()
 	}
 
-	serviceType := diutils.TypeOf[T]()
-	inst, err := c.Resolve(serviceType, ctx)
+	inst, err := c.Resolve(key, ctx)
 	if err != nil {
-		diutils.DebugLog("[Container] Error resolving service of type: %v, error: %v", serviceType, err)
-		panic(fmt.Sprintf("failed to resolve service of type: %v, error: %v", serviceType, err))
+		diutils.DebugLog("[Container] Error resolving service with key: %v, error: %v", key, err)
+		panic(fmt.Sprintf("failed to resolve service with key: %v, error: %v", key, err))
 	}
-	return inst.(T)
+
+	if inst == nil {
+		panic(fmt.Sprintf("resolved instance is nil for key: %v", key))
+	}
+
+	val, ok := inst.(T)
+	if !ok {
+		panic(fmt.Sprintf("resolved instance is not of type %v", diutils.TypeOf[T]()))
+	}
+	return val
 }
 
 // Register registers a service of type T with the container using the provided factory function and lifecycle scope.
 //
 // The factory function must be a function that returns exactly one value of type T.
 // The scope determines the lifetime of the service instance (Transient, Singleton, Scoped).
-func Register[T any](c Container, factoryFn interface{}, scope LifecycleScope) error {
-	return c.Register(diutils.TypeOf[T](), factoryFn, scope)
+//
+// Parameters:
+//
+// Container: The container instance in which to register the service.
+//
+// Scope: The lifecycle scope of the service (Transient, Singleton, Scoped).
+//
+// FactoryFn: The factory function used to create instances of the service.
+func Register[T any](c Container, scope LifecycleScope, factoryFn interface{}) error {
+	serviceType := diutils.TypeOf[T]()
+	key := diutils.NameOfType(serviceType)
+	return RegisterWithKey[T](c, key, scope, factoryFn)
 }
 
+// RegisterWithKey registers a service of type T with the container using the provided key, factory function, and lifecycle scope.
+//
+// The factory function must be a function that returns exactly one value of type T.
+// The scope determines the lifetime of the service instance (Transient, Singleton, Scoped).
+//
+// Parameters:
+//
+// Container: The container instance in which to register the service.
+//
+// Key: The key associated with the service to register.
+//
+// Scope: The lifecycle scope of the service (Transient, Singleton, Scoped).
+//
+// FactoryFn: The factory function used to create instances of the service.
+func RegisterWithKey[T any](c Container, key string, scope LifecycleScope, factoryFn interface{}) error {
+	if c == nil {
+		return fmt.Errorf("container cannot be nil")
+	}
+	if strings.TrimSpace(key) == "" {
+		return fmt.Errorf("key cannot be empty")
+	}
+
+	serviceType := diutils.TypeOf[T]()
+	return c.Register(serviceType, key, scope, factoryFn)
+}
+
+// Container represents a dependency injection container that manages the lifecycle of services.
 type Container interface {
 	NewContext() LifecycleContext
 	CloseContext(ctx LifecycleContext) []error
 	BackgroundContext() LifecycleContext
 	Shutdown() []error
-	Resolve(serviceType reflect.Type, ctx LifecycleContext) (interface{}, error)
-	Register(serviceType reflect.Type, factoryFn interface{}, scope LifecycleScope) error
+	Resolve(key string, ctx LifecycleContext) (interface{}, error)
+	Register(serviceType reflect.Type, key string, scope LifecycleScope, factoryFn interface{}) error
+	Validate() error
 }
 
 type containerEntry struct {
 	serviceType     reflect.Type   // The type of the service
+	key             string         // The key associated with the service type
 	factoryFn       reflect.Value  // The factory function to create instances of the service
 	factoryFnParams []reflect.Type // The parameter types of the factory function
 	scope           LifecycleScope // The scope of the service (Transient, Singleton, Scoped)
@@ -64,16 +139,17 @@ type containerEntry struct {
 
 func NewContainer() Container {
 	container := &containerImpl{
-		registry:          make(map[reflect.Type]*containerEntry),
+		registry:          make(map[string]*containerEntry),
 		lifecycleContexts: make(map[string]LifecycleContext),
 		mutex:             sync.RWMutex{},
 	}
+	// Create the background lifecycle context
 	container.lifecycleContexts[backgroundContextKey] = NewLifecycleContext()
 	return container
 }
 
 type containerImpl struct {
-	registry          map[reflect.Type]*containerEntry
+	registry          map[string]*containerEntry
 	mutex             sync.RWMutex
 	lifecycleContexts map[string]LifecycleContext
 }
@@ -142,9 +218,12 @@ func (c *containerImpl) Shutdown() []error {
 	return allErrors
 }
 
-func (c *containerImpl) Register(serviceType reflect.Type, factoryFn interface{}, scope LifecycleScope) error {
+func (c *containerImpl) Register(serviceType reflect.Type, key string, scope LifecycleScope, factoryFn interface{}) error {
 	if serviceType == nil {
 		return fmt.Errorf("serviceType cannot be nil")
+	}
+	if strings.TrimSpace(key) == "" {
+		return fmt.Errorf("key cannot be empty")
 	}
 	if factoryFn == nil {
 		return fmt.Errorf("factoryFn cannot be nil")
@@ -153,8 +232,8 @@ func (c *containerImpl) Register(serviceType reflect.Type, factoryFn interface{}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if _, exists := c.registry[serviceType]; exists {
-		return fmt.Errorf("service already registered: %s", serviceType.String())
+	if _, exists := c.registry[key]; exists {
+		return fmt.Errorf("service already registered with key: %s", key)
 	}
 
 	// Convert the factory function to a reflect.Value and get its type
@@ -174,39 +253,53 @@ func (c *containerImpl) Register(serviceType reflect.Type, factoryFn interface{}
 	// Create a new registry entry for the service
 	entry := &containerEntry{
 		serviceType:     serviceType,
+		key:             key,
 		factoryFn:       factoryFnValue,
 		factoryFnParams: make([]reflect.Type, factoryFnType.NumIn()),
 		scope:           scope,
 	}
-	c.registry[serviceType] = entry
+	c.registry[key] = entry
 
 	// Store the parameter types of the factory function
 	for i := 0; i < factoryFnType.NumIn(); i++ {
 		entry.factoryFnParams[i] = factoryFnType.In(i)
 	}
 
-	diutils.DebugLog("Registered service: %s with scope: %v", serviceType.String(), scope)
+	diutils.DebugLog("Registered service: %s with key: %s scope: %v", serviceType.String(), key, scope)
 	return nil
 }
 
-func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) (interface{}, error) {
+func (c *containerImpl) Resolve(key string, ctx LifecycleContext) (interface{}, error) {
+	var zero interface{}
+
+	// If no context is provided, use the background context
 	if ctx == nil {
 		ctx = c.BackgroundContext()
 	}
-	var zero interface{}
 
-	diutils.DebugLog("Resolving service: %s", serviceType.String())
+	// If the key corresponds to the Container, return the container itself
+	if key == containerReflectedKey {
+		return c, nil
+	}
+
+	// If the key corresponds to the LifecycleContext, return the provided context
+	if key == lifecycleContextReflectedKey {
+		return ctx, nil
+	}
 
 	// Check if the service is registered
 	c.mutex.RLock()
-	_, exists := c.registry[serviceType]
+	entry, exists := c.registry[key]
 	c.mutex.RUnlock()
 	if !exists {
-		return zero, fmt.Errorf("service not registered: %s", serviceType.String())
+		return zero, fmt.Errorf("service with key '%s' not registered", key)
 	}
+	serviceType := entry.serviceType
+
+	diutils.DebugLog("Resolving service: %s with key: %s", serviceType.String(), key)
 
 	// Get the dependency tree for the service
-	dependencies, err := c.getDependencyTree(serviceType)
+	dependencies, err := c.getDependencyTree(key)
 	if err != nil {
 		return zero, fmt.Errorf("failed to get dependency tree for %s: %w", serviceType.String(), err)
 	}
@@ -220,7 +313,7 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 	}
 
 	// Retrieve the resolved instance for the requested service
-	value, exists := resolved[serviceType]
+	value, exists := resolved[key]
 	if !exists {
 		return zero, fmt.Errorf("failed to resolve service: %s", serviceType.String())
 	}
@@ -229,51 +322,78 @@ func (c *containerImpl) Resolve(serviceType reflect.Type, ctx LifecycleContext) 
 	return value.Interface(), nil
 }
 
-func (c *containerImpl) getDependencyTree(serviceType reflect.Type) ([]reflect.Type, error) {
-	seen := make(map[reflect.Type]bool)
-	visiting := make(map[reflect.Type]bool)
-	order := make([]reflect.Type, 0)
+func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error) {
+	seen := make(map[*containerEntry]bool)
+	visiting := make(map[*containerEntry]bool)
+	order := make([]*containerEntry, 0)
 
-	var visit func(reflect.Type) error
-	visit = func(t reflect.Type) error {
-		if visiting[t] {
-			return fmt.Errorf("circular dependency detected for service: %s", t.String())
-		}
-		if seen[t] {
+	var visit func(string) error
+	visit = func(k string) error {
+		// If the type is Container or LifecycleContext, we don't need to resolve its dependencies
+		if k == containerReflectedKey || k == lifecycleContextReflectedKey {
+			var typ reflect.Type
+			switch k {
+			case containerReflectedKey:
+				typ = diutils.TypeOf[Container]()
+			case lifecycleContextReflectedKey:
+				typ = diutils.TypeOf[LifecycleContext]()
+			}
+			fakeEntry := &containerEntry{
+				serviceType: typ,
+				key:         k,
+				scope:       Transient,
+			}
+			order = append(order, fakeEntry)
+			visiting[fakeEntry] = false
+			seen[fakeEntry] = true
 			return nil
 		}
-		visiting[t] = true
+
+		// Retrieve the container entry for the current key
 		c.mutex.RLock()
-		entry, exists := c.registry[t]
+		entry, exists := c.registry[k]
 		c.mutex.RUnlock()
 		if !exists {
-			return fmt.Errorf("service not found: %s", t.String())
+			return fmt.Errorf("service not found: %s", k)
 		}
+
+		if visiting[entry] {
+			return fmt.Errorf("circular dependency detected for service: %s", entry.serviceType.String())
+		}
+		if seen[entry] {
+			return nil
+		}
+		visiting[entry] = true
+
 		for _, dep := range entry.factoryFnParams {
-			if err := visit(dep); err != nil {
+			if err := visit(diutils.NameOfType(dep)); err != nil {
 				return err
 			}
 		}
-		visiting[t] = false
-		seen[t] = true
-		order = append(order, t)
+		visiting[entry] = false
+		seen[entry] = true
+		order = append(order, entry)
 		return nil
 	}
-	if err := visit(serviceType); err != nil {
+	if err := visit(key); err != nil {
 		return nil, err
 	}
 	return order, nil
 }
 
-func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx LifecycleContext) (map[reflect.Type]reflect.Value, error) {
-	resolved := make(map[reflect.Type]reflect.Value)
-	for _, depType := range dependencies {
-		// Retrieve the container entry for the current dependency
-		c.mutex.RLock()
-		entry, exists := c.registry[depType]
-		c.mutex.RUnlock()
-		if !exists {
-			return nil, fmt.Errorf("service not found: %s", depType.String())
+func (c *containerImpl) resolveDependencies(dependencies []*containerEntry, ctx LifecycleContext) (map[string]reflect.Value, error) {
+	resolved := make(map[string]reflect.Value)
+	for _, entry := range dependencies {
+		depType := entry.serviceType
+		// If the dependency is of type LifecycleContext, use the provided context
+		if entry.key == lifecycleContextReflectedKey {
+			resolved[entry.key] = reflect.ValueOf(ctx)
+			continue
+		}
+		// If the dependency is of type Container, use the current container instance
+		if entry.key == containerReflectedKey {
+			resolved[entry.key] = reflect.ValueOf(c)
+			continue
 		}
 
 		diutils.DebugLog("Resolving dependency: %s", depType.String())
@@ -295,7 +415,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			// Resolve the dependencies for the factory function
 			params := make([]reflect.Value, 0, len(entry.factoryFnParams))
 			for _, paramType := range entry.factoryFnParams {
-				paramValue, exists := resolved[paramType]
+				paramValue, exists := resolved[diutils.NameOfType(paramType)]
 				if !exists {
 					return zero, fmt.Errorf("dependency %s for service %s not resolved", paramType.String(), depType.String())
 				}
@@ -319,7 +439,6 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 			c.persistInstance(ctx, entry, instance)
 
 			diutils.DebugLog("Created new instance for: %s", depType.String())
-
 			return instance, nil
 		}()
 		if err != nil {
@@ -327,7 +446,7 @@ func (c *containerImpl) resolveDependencies(dependencies []reflect.Type, ctx Lif
 		}
 
 		// Add the created instance to the resolved map
-		resolved[depType] = instance
+		resolved[entry.key] = instance
 	}
 	return resolved, nil
 }
@@ -341,7 +460,7 @@ func (c *containerImpl) loadInstance(ctx LifecycleContext, entry *containerEntry
 		// For Singleton scope, use the container's background lifecycle context
 		bgCtx := c.BackgroundContext()
 		// If the instance is already cached in the container background lifecycle context, return it
-		if cached, found := bgCtx.GetInstance(entry.serviceType); found {
+		if cached, found := bgCtx.GetInstance(entry.key); found {
 			return cached, true
 		}
 	case Scoped:
@@ -350,10 +469,12 @@ func (c *containerImpl) loadInstance(ctx LifecycleContext, entry *containerEntry
 			ctx = c.BackgroundContext()
 		}
 		// If the instance is already cached in the current lifecycle context, return it
-		instance, exists := ctx.GetInstance(entry.serviceType)
+		instance, exists := ctx.GetInstance(entry.key)
 		if exists {
 			return instance, true
 		}
+	case Transient:
+		// For Transient scope, do not cache the instance; it will be created anew each time
 	}
 	return reflect.Value{}, false
 }
@@ -365,8 +486,8 @@ func (c *containerImpl) persistInstance(ctx LifecycleContext, entry *containerEn
 		// For Singleton scope, use the container's background lifecycle context
 		bgCtx := c.BackgroundContext()
 		// Store the singleton instance in the container background lifecycle context if it doesn't already exist
-		if _, exists := bgCtx.GetInstance(entry.serviceType); !exists {
-			bgCtx.SetInstance(entry.serviceType, instance)
+		if _, exists := bgCtx.GetInstance(entry.key); !exists {
+			bgCtx.SetInstance(entry.key, instance)
 		}
 	case Scoped:
 		// For Scoped scope, use the provided lifecycle context or fall back to the container's background lifecycle context
@@ -374,6 +495,29 @@ func (c *containerImpl) persistInstance(ctx LifecycleContext, entry *containerEn
 			ctx = c.BackgroundContext()
 		}
 		// Store the scoped instance in the current lifecycle context
-		ctx.SetInstance(entry.serviceType, instance)
+		ctx.SetInstance(entry.key, instance)
+	case Transient:
+		// For Transient scope, do not cache the instance; it will be created anew each time
 	}
+}
+
+// Validate checks that all registered services have their dependencies (factory function parameters) also registered.
+// It returns an error if any service depends on an unregistered type.
+func (c *containerImpl) Validate() error {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	for _, entry := range c.registry {
+		for _, dep := range entry.factoryFnParams {
+			depKey := diutils.NameOfType(dep)
+			if depKey == containerReflectedKey || depKey == lifecycleContextReflectedKey {
+				continue
+			}
+			if _, ok := c.registry[depKey]; !ok {
+				return fmt.Errorf("service %s depends on unregistered type %s",
+					entry.serviceType.String(), dep.String())
+			}
+		}
+	}
+	return nil
 }

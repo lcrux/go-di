@@ -22,6 +22,9 @@ The `go-di` project is a lightweight and flexible dependency injection library f
 - **Dependency Resolution**: Automatically resolve dependencies and manage their lifetimes.
 - **Scoped Contexts**: Create and manage scoped instances for specific contexts.
 - **Thread-Safe**: Built with concurrency in mind, ensuring thread safety.
+- **Keyed Services**: Register and resolve services by custom keys.
+- **Factory Injection**: Factories can receive `Container` and/or `LifecycleContext`.
+- **Validation**: Validate registrations after setup.
 
 ## Installation
 
@@ -54,9 +57,9 @@ func main() {
     defer container.Shutdown()
 
     // Register the service
-    di.Register[MyService](container, func() *MyService {
+    di.Register[MyService](container, di.Singleton, func() *MyService {
         return &MyService{Name: "Hello, go-di!"}
-    }, di.Singleton)
+    })
 
     // Resolve the service
     service := di.Resolve[MyService](container, nil)
@@ -77,9 +80,9 @@ type MyService struct {}
 container := di.NewContainer()
 defer container.Shutdown()
 
-di.Register[MyService](container, func() *MyService {
+di.Register[MyService](container, di.Singleton, func() *MyService {
     return &MyService{}
-}, di.Singleton)
+})
 ```
 
 ### Resolving Services
@@ -88,6 +91,53 @@ To resolve a registered service, use the `Resolve` function with a container ins
 
 ```go
 service := di.Resolve[MyService](container, nil)
+```
+
+### Keyed Registrations and Resolution
+
+Register services with explicit keys and resolve them by key:
+
+```go
+di.RegisterWithKey[*MyService](container, "my-service.primary", di.Singleton, func() *MyService {
+    return &MyService{Name: "Primary"}
+})
+
+svc := di.ResolveWithKey[*MyService](container, "my-service.primary", nil)
+```
+
+### Resolving Keyed Instances in Custom Factories
+
+If you need a specific key inside a factory, request `Container` and/or `LifecycleContext` and resolve manually:
+
+```go
+di.RegisterWithKey[*MyService](container, "my-service.primary", di.Singleton, func() *MyService {
+    return &MyService{Name: "Primary"}
+})
+
+di.Register[*Consumer](container, di.Transient, func(c di.Container, ctx di.LifecycleContext) *Consumer {
+    primary := di.ResolveWithKey[*MyService](c, "my-service.primary", ctx)
+    return &Consumer{Service: primary}
+})
+```
+
+### Wrapper Types to Select Instances by Type
+
+You can create wrapper types to distinguish multiple instances of the same underlying type:
+
+```go
+type RepoPrimary struct{ Repo }
+type RepoReplica struct{ Repo }
+
+di.Register[RepoPrimary](container, di.Singleton, func() RepoPrimary {
+    return RepoPrimary{Repo: NewRepo("primary")}
+})
+di.Register[RepoReplica](container, di.Singleton, func() RepoReplica {
+    return RepoReplica{Repo: NewRepo("replica")}
+})
+
+di.Register[*Service](container, di.Transient, func(p RepoPrimary, r RepoReplica) *Service {
+    return NewService(p.Repo, r.Repo)
+})
 ```
 
 ### Lifecycle Scopes
@@ -141,14 +191,14 @@ func main() {
     defer container.Shutdown()
 
     // Register the Database service
-    di.Register[Database](container, func() *Database {
+    di.Register[Database](container, di.Singleton, func() *Database {
         return &Database{ConnectionString: "postgres://user:password@localhost/db"}
-    }, di.Singleton)
+    })
 
     // Register the UserService with a dependency on Database
-    di.Register[UserService](container, func(db *Database) *UserService {
+    di.Register[UserService](container, di.Singleton, func(db *Database) *UserService {
         return &UserService{DB: db}
-    }, di.Singleton)
+    })
 
     // Resolve the UserService
     userService := di.Resolve[UserService](container, nil)
@@ -173,29 +223,39 @@ func (w *Worker) EndLifecycle() error {
 container := di.NewContainer()
 defer container.Shutdown()
 
-di.Register[*Worker](container, func() *Worker {
+di.Register[*Worker](container, di.Scoped, func() *Worker {
     return &Worker{}
-}, di.Scoped)
+})
 
 ctx := container.NewContext()
 _ = di.Resolve[*Worker](container, ctx)
 _ = container.CloseContext(ctx) // triggers EndLifecycle on scoped instances
 ```
 
+### Validation
+
+You can validate all registrations after setup to detect missing dependencies early:
+
+```go
+if err := container.Validate(); err != nil {
+    panic(err)
+}
+```
+
 ## Project Structure
 
-- **lib/di/container.go**: Service registration, dependency resolution, and container lifecycle.
-- **lib/di/lifecycle_context.go**: Lifecycle scopes, contexts, and shutdown behavior.
-- **lib/utils/debug_logger.go**: Debug logging utilities and environment flag handling.
-- **lib/utils/semaphore.go**: Concurrency helpers used during lifecycle shutdown.
-- **lib/utils/types.go**: Generic type utilities for reflection.
+- **di/container.go**: Service registration, dependency resolution, and container lifecycle.
+- **di/lifecycle_context.go**: Lifecycle scopes, contexts, and shutdown behavior.
+- **di/di-utils/debug_logger.go**: Debug logging utilities and environment flag handling.
+- **di/di-utils/semaphore.go**: Concurrency helpers used during lifecycle shutdown.
+- **di/di-utils/types.go**: Generic type utilities for reflection.
 
 ## Running Tests
 
 To run the tests, use the following commands:
 
 ```bash
-go test ./lib/...
+go test ./di/...
 go test ./demo/...
 ```
 
