@@ -13,11 +13,11 @@ This document provides guidelines for developers contributing to the `go-di` lib
 ### Package Structure
 
 - Organize code into logical packages:
-  - `lib/di/container.go`: Service registration, dependency resolution, and container lifecycle.
-  - `lib/di/lifecycle_context.go`: Lifecycle scopes, context management, and cleanup.
-  - `lib/utils/debug_logger.go`: Debug logging utilities.
-  - `lib/utils/semaphore.go`: Concurrency helpers used for shutdown operations.
-  - `lib/utils/types.go`: Generic type utilities for reflection.
+  - `di/container.go`: Service registration, dependency resolution, and container lifecycle.
+  - `di/lifecycle_context.go`: Lifecycle scopes, context management, and cleanup.
+  - `di/di-utils/debug_logger.go`: Debug logging utilities.
+  - `di/di-utils/semaphore.go`: Concurrency helpers used for shutdown operations.
+  - `di/di-utils/types.go`: Generic type utilities for reflection.
   - `demo/`: Example application demonstrating container usage.
 - Keep package responsibilities focused and cohesive.
 

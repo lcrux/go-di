@@ -45,6 +45,7 @@ package main
 
 import (
     "fmt"
+    "log"
     "github.com/lcrux/go-di/di"
 )
 
@@ -62,7 +63,10 @@ func main() {
     })
 
     // Resolve the service
-    service := di.Resolve[MyService](container, nil)
+    service, err := di.Resolve[MyService](container, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
 
     fmt.Println(service.Name)
 }
@@ -90,7 +94,10 @@ di.Register[MyService](container, di.Singleton, func() *MyService {
 To resolve a registered service, use the `Resolve` function with a container instance:
 
 ```go
-service := di.Resolve[MyService](container, nil)
+service, err := di.Resolve[MyService](container, nil)
+if err != nil {
+    // handle error
+}
 ```
 
 ### Keyed Registrations and Resolution
@@ -102,7 +109,10 @@ di.RegisterWithKey[*MyService](container, "my-service.primary", di.Singleton, fu
     return &MyService{Name: "Primary"}
 })
 
-svc := di.ResolveWithKey[*MyService](container, "my-service.primary", nil)
+svc, err := di.ResolveWithKey[*MyService](container, "my-service.primary", nil)
+if err != nil {
+    // handle error
+}
 ```
 
 ### Resolving Keyed Instances in Custom Factories
@@ -115,7 +125,7 @@ di.RegisterWithKey[*MyService](container, "my-service.primary", di.Singleton, fu
 })
 
 di.Register[*Consumer](container, di.Transient, func(c di.Container, ctx di.LifecycleContext) *Consumer {
-    primary := di.ResolveWithKey[*MyService](c, "my-service.primary", ctx)
+    primary := di.MustResolveWithKey[*MyService](c, "my-service.primary", ctx)
     return &Consumer{Service: primary}
 })
 ```
@@ -151,7 +161,7 @@ di.Register[*Service](container, di.Transient, func(p RepoPrimary, r RepoReplica
 ### Container Lifecycle
 
 - `NewContainer()` creates a new container with its own background lifecycle context.
-- `Resolve(..., nil)` uses the container’s background context automatically.
+- `Resolve(..., nil)` uses the container’s background context automatically and returns `(T, error)`.
 - `CloseContext(ctx)` triggers lifecycle cleanup for scoped instances and returns any errors.
 - `Shutdown()` closes all contexts and returns any errors from lifecycle cleanup.
 
@@ -163,7 +173,10 @@ To use scoped instances, create a new lifecycle context from the container:
 ctx := container.NewContext()
 defer container.CloseContext(ctx)
 
-scopedService := di.Resolve[MyService](container, ctx)
+scopedService, err := di.Resolve[MyService](container, ctx)
+if err != nil {
+    // handle error
+}
 ```
 
 ### Services with Dependencies
@@ -201,7 +214,10 @@ func main() {
     })
 
     // Resolve the UserService
-    userService := di.Resolve[UserService](container, nil)
+    userService, err := di.Resolve[UserService](container, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
 
     fmt.Printf("UserService is using database with connection string: %s\n", userService.DB.ConnectionString)
 }
@@ -228,7 +244,9 @@ di.Register[*Worker](container, di.Scoped, func() *Worker {
 })
 
 ctx := container.NewContext()
-_ = di.Resolve[*Worker](container, ctx)
+if _, err := di.Resolve[*Worker](container, ctx); err != nil {
+    // handle error
+}
 _ = container.CloseContext(ctx) // triggers EndLifecycle on scoped instances
 ```
 
@@ -241,14 +259,6 @@ if err := container.Validate(); err != nil {
     panic(err)
 }
 ```
-
-## Project Structure
-
-- **di/container.go**: Service registration, dependency resolution, and container lifecycle.
-- **di/lifecycle_context.go**: Lifecycle scopes, contexts, and shutdown behavior.
-- **di/di-utils/debug_logger.go**: Debug logging utilities and environment flag handling.
-- **di/di-utils/semaphore.go**: Concurrency helpers used during lifecycle shutdown.
-- **di/di-utils/types.go**: Generic type utilities for reflection.
 
 ## Running Tests
 

@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// Resolve the TodoController
-	todoController := di.Resolve[controllers.TodoController](container, nil)
+	todoController := di.MustResolve[controllers.TodoController](container, nil)
 	if todoController == nil {
 		panic("failed to resolve TodoController")
 	}
@@ -46,7 +46,7 @@ func main() {
 	// Create a new lifecycle context and resolve the TodoController within that context
 	ctx := container.NewContext()
 	// Resolve the TodoController within the new lifecycle context
-	todoController2 := di.Resolve[controllers.TodoController](container, ctx)
+	todoController2 := di.MustResolve[controllers.TodoController](container, ctx)
 	if todoController2 == nil {
 		panic("failed to resolve TodoController with lifecycle context, and key: controller2")
 	}
@@ -105,7 +105,7 @@ func registerServices(container di.Container) error {
 	err := di.Register[controllers.TodoController](
 		container, di.Scoped,
 		func(c di.Container, ctx di.LifecycleContext) controllers.TodoController {
-			todoService := di.ResolveWithKey[services.TodoService](container, todoServiceKey, ctx)
+			todoService := di.MustResolveWithKey[services.TodoService](container, todoServiceKey, ctx)
 			return controllers.NewTodoController(todoService)
 		},
 	)

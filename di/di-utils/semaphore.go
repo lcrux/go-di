@@ -29,6 +29,7 @@ func (s *Semaphore) Release() {
 }
 
 // Done closes the semaphore channel, releasing all resources.
+// Any attempt to acquire or release the semaphore after calling Done will panic.
 func (s *Semaphore) Done() {
 	close(s.ch)
 }
