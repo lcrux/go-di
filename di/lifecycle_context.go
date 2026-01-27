@@ -120,7 +120,7 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 				errorsMux.Lock()
 				errors = append(
 					errors,
-					fmt.Errorf("error in EndLifecycle for service type: %v, error: %v", k, err),
+					fmt.Errorf("error in EndLifecycle for service type: %v: %w", k, err),
 				)
 				errorsMux.Unlock()
 			} else {
