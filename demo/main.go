@@ -44,17 +44,21 @@ func main() {
 	}
 
 	// Create a new lifecycle context and resolve the TodoController within that context
-	cctx := container.NewContext()
+	ctx := container.NewContext()
 	// Resolve the TodoController within the new lifecycle context
-	todoController2 := di.Resolve[controllers.TodoController](container, cctx)
+	todoController2 := di.Resolve[controllers.TodoController](container, ctx)
 	if todoController2 == nil {
-		panic("failed to resolve TodoController with lifecycle context")
+		panic("failed to resolve TodoController with lifecycle context, and key: controller2")
 	}
 
 	// Add the TodoController to the API2 router
 	api2Router := r.Group("api2")
 	if err := api2Router.AddController(todoController2, nil); err != nil {
 		log.Fatalf("Failed to add controller to API2 router: %v", err)
+	}
+
+	if todoController2 == todoController {
+		panic("expected different instances for TodoController with different keys")
 	}
 
 	// Chain middlewares
@@ -91,14 +95,23 @@ func main() {
 }
 
 func registerServices(container di.Container) error {
-	if err := di.Register[controllers.TodoController](container, controllers.NewTodoController, di.Scoped); err != nil {
-		return fmt.Errorf("Failed to register TodoController: %v", err)
+	todoServiceKey := "todo-service"
+	if err := di.RegisterWithKey[services.TodoService](container, todoServiceKey, di.Singleton, services.NewTodoService); err != nil {
+		return fmt.Errorf("Failed to register service with key %s: %v", todoServiceKey, err)
 	}
-	if err := di.Register[services.TodoService](container, services.NewTodoService, di.Transient); err != nil {
-		return fmt.Errorf("Failed to register TodoService: %v", err)
-	}
-	if err := di.Register[repositories.TodoRepository](container, repositories.NewTodoRepository, di.Singleton); err != nil {
+	if err := di.Register[repositories.TodoRepository](container, di.Singleton, repositories.NewTodoRepository); err != nil {
 		return fmt.Errorf("Failed to register TodoRepository: %v", err)
 	}
+	err := di.Register[controllers.TodoController](
+		container, di.Scoped,
+		func(c di.Container, ctx di.LifecycleContext) controllers.TodoController {
+			todoService := di.ResolveWithKey[services.TodoService](container, todoServiceKey, ctx)
+			return controllers.NewTodoController(todoService)
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to register TodoController: %v", err)
+	}
+
 	return nil
 }

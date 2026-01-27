@@ -33,7 +33,7 @@ func NewLifecycleContext() LifecycleContext {
 	diutils.DebugLog("Creating new lifecycle context")
 	ctx := &lifecycleContextImpl{
 		id:    uuid.New().String(),
-		cache: make(map[reflect.Type]reflect.Value),
+		cache: make(map[string]reflect.Value),
 	}
 	return ctx
 }
@@ -42,14 +42,14 @@ func NewLifecycleContext() LifecycleContext {
 type LifecycleContext interface {
 	ID() string
 	Shutdown() []error
-	GetInstance(serviceType reflect.Type) (reflect.Value, bool)
-	SetInstance(serviceType reflect.Type, instance reflect.Value)
+	GetInstance(key string) (reflect.Value, bool)
+	SetInstance(key string, instance reflect.Value)
 }
 
 // lifecycleContextImpl is the implementation of the LifecycleContext interface.
 type lifecycleContextImpl struct {
 	id    string
-	cache map[reflect.Type]reflect.Value
+	cache map[string]reflect.Value
 	mutex sync.RWMutex
 }
 
@@ -73,7 +73,7 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 
 	// Acquire a read lock to safely access the cache and get the keys
 	ctx.mutex.RLock()
-	cacheKeys := make([]reflect.Type, 0, len(ctx.cache))
+	cacheKeys := make([]string, 0, len(ctx.cache))
 	for k := range ctx.cache {
 		cacheKeys = append(cacheKeys, k)
 	}
@@ -101,7 +101,7 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 		// Call EndLifecycle in a separate goroutine to avoid blocking
 		wg.Add(1)
 		semaphore.Acquire()
-		go func(lm LifecycleListener, k reflect.Type, ctx *lifecycleContextImpl) {
+		go func(lm LifecycleListener, k string, ctx *lifecycleContextImpl) {
 			defer wg.Done()
 			defer semaphore.Release()
 			defer func() {
@@ -139,16 +139,16 @@ func (ctx *lifecycleContextImpl) Shutdown() []error {
 
 // GetInstance retrieves an instance of the specified service type from the context.
 // Logs the operation and whether the instance was found.
-func (ctx *lifecycleContextImpl) GetInstance(serviceType reflect.Type) (reflect.Value, bool) {
+func (ctx *lifecycleContextImpl) GetInstance(key string) (reflect.Value, bool) {
 	ctx.mutex.RLock()
 	defer ctx.mutex.RUnlock()
 
-	diutils.DebugLog("[Context ID: %s] Getting instance for service type: %v", ctx.ID(), serviceType)
-	instance, exists := ctx.cache[serviceType]
+	diutils.DebugLog("[Context ID: %s] Getting instance for service type: %v", ctx.ID(), key)
+	instance, exists := ctx.cache[key]
 	if exists {
-		diutils.DebugLog("[Context ID: %s] Instance found for service type: %v", ctx.ID(), serviceType)
+		diutils.DebugLog("[Context ID: %s] Instance found for service type: %v", ctx.ID(), key)
 	} else {
-		diutils.DebugLog("[Context ID: %s] No instance found for service type: %v", ctx.ID(), serviceType)
+		diutils.DebugLog("[Context ID: %s] No instance found for service type: %v", ctx.ID(), key)
 	}
 
 	return instance, exists
@@ -158,14 +158,14 @@ func (ctx *lifecycleContextImpl) GetInstance(serviceType reflect.Type) (reflect.
 // Logs the operation and confirms the instance has been set.
 //
 // Any existing instance, of the specified type, will be overwritten.
-func (ctx *lifecycleContextImpl) SetInstance(serviceType reflect.Type, instance reflect.Value) {
+func (ctx *lifecycleContextImpl) SetInstance(key string, instance reflect.Value) {
 	ctx.mutex.Lock()
 	defer ctx.mutex.Unlock()
 
-	diutils.DebugLog("[Context ID: %s] Setting instance for service type: %v", ctx.ID(), serviceType)
-	if _, exists := ctx.cache[serviceType]; exists {
-		diutils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", ctx.ID(), serviceType)
+	diutils.DebugLog("[Context ID: %s] Setting instance for service type: %v", ctx.ID(), key)
+	if _, exists := ctx.cache[key]; exists {
+		diutils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", ctx.ID(), key)
 	}
-	ctx.cache[serviceType] = instance
-	diutils.DebugLog("[Context ID: %s] Instance set for service type: %v", ctx.ID(), serviceType)
+	ctx.cache[key] = instance
+	diutils.DebugLog("[Context ID: %s] Instance set for service type: %v", ctx.ID(), key)
 }

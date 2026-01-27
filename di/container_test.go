@@ -26,6 +26,19 @@ type depD struct {
 	c *depC
 }
 
+type depWithContainer struct {
+	c Container
+}
+
+type depWithContext struct {
+	ctx LifecycleContext
+}
+
+type depWithContainerAndContext struct {
+	c   Container
+	ctx LifecycleContext
+}
+
 type listenerDep struct {
 	called *int32
 }
@@ -41,7 +54,7 @@ func TestContainer_RegisterAndResolve_Transient(t *testing.T) {
 	c := NewContainer()
 	ctx := c.NewContext()
 
-	err := Register[*depA](c, func() *depA { return &depA{name: "a"} }, Transient)
+	err := Register[*depA](c, Transient, func() *depA { return &depA{name: "a"} })
 	if err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
@@ -59,10 +72,10 @@ func TestContainer_Resolve_SingletonAcrossContexts(t *testing.T) {
 	ctx2 := c.NewContext()
 
 	created := 0
-	err := Register[*depA](c, func() *depA {
+	err := Register[*depA](c, Singleton, func() *depA {
 		created++
 		return &depA{name: "singleton"}
-	}, Singleton)
+	})
 	if err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
@@ -83,10 +96,10 @@ func TestContainer_Resolve_ScopedPerContext(t *testing.T) {
 	ctx2 := c.NewContext()
 
 	created := 0
-	err := Register[*depA](c, func() *depA {
+	err := Register[*depA](c, Scoped, func() *depA {
 		created++
 		return &depA{name: "scoped"}
-	}, Scoped)
+	})
 	if err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
@@ -109,16 +122,16 @@ func TestContainer_Resolve_MultipleDependencies(t *testing.T) {
 	c := NewContainer()
 	ctx := c.NewContext()
 
-	if err := Register[*depA](c, func() *depA { return &depA{name: "a"} }, Transient); err != nil {
+	if err := Register[*depA](c, Transient, func() *depA { return &depA{name: "a"} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
-	if err := Register[*depB](c, func() *depB { return &depB{name: "b"} }, Transient); err != nil {
+	if err := Register[*depB](c, Transient, func() *depB { return &depB{name: "b"} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
-	if err := Register[*depC](c, func(a *depA, b *depB) *depC { return &depC{a: a, b: b} }, Transient); err != nil {
+	if err := Register[*depC](c, Transient, func(a *depA, b *depB) *depC { return &depC{a: a, b: b} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
-	if err := Register[*depD](c, func(ca *depC) *depD { return &depD{c: ca} }, Transient); err != nil {
+	if err := Register[*depD](c, Transient, func(ca *depC) *depD { return &depD{c: ca} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
 
@@ -128,14 +141,74 @@ func TestContainer_Resolve_MultipleDependencies(t *testing.T) {
 	}
 }
 
+func TestContainer_FactoryReceivesContainer(t *testing.T) {
+	c := NewContainer()
+	ctx := c.NewContext()
+
+	if err := Register[*depWithContainer](c, Transient, func(c Container) *depWithContainer {
+		return &depWithContainer{c: c}
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	instance := Resolve[*depWithContainer](c, ctx)
+	if instance == nil || instance.c == nil {
+		t.Fatal("expected container to be injected")
+	}
+	if instance.c != c {
+		t.Fatal("expected injected container to be the same instance")
+	}
+}
+
+func TestContainer_FactoryReceivesLifecycleContext(t *testing.T) {
+	c := NewContainer()
+	ctx := c.NewContext()
+
+	if err := Register[*depWithContext](c, Transient, func(ctx LifecycleContext) *depWithContext {
+		return &depWithContext{ctx: ctx}
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	instance := Resolve[*depWithContext](c, ctx)
+	if instance == nil || instance.ctx == nil {
+		t.Fatal("expected lifecycle context to be injected")
+	}
+	if instance.ctx.ID() != ctx.ID() {
+		t.Fatal("expected injected context to match the provided context")
+	}
+}
+
+func TestContainer_FactoryReceivesContainerAndLifecycleContext(t *testing.T) {
+	c := NewContainer()
+	ctx := c.NewContext()
+
+	if err := Register[*depWithContainerAndContext](c, Transient, func(c Container, ctx LifecycleContext) *depWithContainerAndContext {
+		return &depWithContainerAndContext{c: c, ctx: ctx}
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	instance := Resolve[*depWithContainerAndContext](c, ctx)
+	if instance == nil || instance.c == nil || instance.ctx == nil {
+		t.Fatal("expected container and lifecycle context to be injected")
+	}
+	if instance.c != c {
+		t.Fatal("expected injected container to be the same instance")
+	}
+	if instance.ctx.ID() != ctx.ID() {
+		t.Fatal("expected injected context to match the provided context")
+	}
+}
+
 func TestContainer_Resolve_CircularDependencies(t *testing.T) {
 	c := NewContainer()
 	ctx := c.NewContext()
 
-	if err := Register[*depA](c, func(b *depB) *depA { return &depA{name: b.name} }, Transient); err != nil {
+	if err := Register[*depA](c, Transient, func(b *depB) *depA { return &depA{name: b.name} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
-	if err := Register[*depB](c, func(a *depA) *depB { return &depB{name: a.name} }, Transient); err != nil {
+	if err := Register[*depB](c, Transient, func(a *depA) *depB { return &depB{name: a.name} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
 
@@ -168,7 +241,7 @@ func TestContainer_Resolve_UnregisteredDependency(t *testing.T) {
 	c := NewContainer()
 	ctx := c.NewContext()
 
-	if err := Register[*depC](c, func(a *depA, b *depB) *depC { return &depC{a: a, b: b} }, Transient); err != nil {
+	if err := Register[*depC](c, Transient, func(a *depA, b *depB) *depC { return &depC{a: a, b: b} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
 	defer func() {
@@ -183,31 +256,92 @@ func TestContainer_Resolve_UnregisteredDependency(t *testing.T) {
 func TestContainer_RegisterValidation(t *testing.T) {
 	c := NewContainer()
 
-	if err := c.Register(nil, func() *depA { return &depA{} }, Transient); err == nil {
+	depAType := diutils.TypeOf[*depA]()
+	depAKey := diutils.NameOfType(depAType)
+
+	if err := c.Register(nil, depAKey, Transient, func() *depA { return &depA{} }); err == nil {
 		t.Fatal("expected error for nil serviceType")
 	}
 
-	if err := c.Register(diutils.TypeOf[*depA](), nil, Transient); err == nil {
+	if err := c.Register(depAType, "", Transient, func() *depA { return &depA{} }); err == nil {
+		t.Fatal("expected error for empty key")
+	}
+
+	if err := c.Register(depAType, depAKey, Transient, nil); err == nil {
 		t.Fatal("expected error for nil factoryFn")
 	}
 
-	if err := c.Register(diutils.TypeOf[*depA](), 42, Transient); err == nil {
+	if err := c.Register(depAType, depAKey, Transient, 42); err == nil {
 		t.Fatal("expected error for non-function factoryFn")
 	}
 
-	if err := c.Register(diutils.TypeOf[*depA](), func() (*depA, error) { return &depA{}, nil }, Transient); err == nil {
+	if err := c.Register(depAType, depAKey, Transient, func() (*depA, error) { return &depA{}, nil }); err == nil {
 		t.Fatal("expected error for invalid return count")
 	}
 
-	if err := c.Register(diutils.TypeOf[*depA](), func() *depB { return &depB{} }, Transient); err == nil {
+	if err := c.Register(depAType, depAKey, Transient, func() *depB { return &depB{} }); err == nil {
 		t.Fatal("expected error for mismatched return type")
 	}
 
-	if err := Register[*depA](c, func() *depA { return &depA{} }, Transient); err != nil {
+	if err := Register[*depA](c, Transient, func() *depA { return &depA{} }); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
-	if err := Register[*depA](c, func() *depA { return &depA{} }, Transient); err == nil {
+	if err := Register[*depA](c, Transient, func() *depA { return &depA{} }); err == nil {
 		t.Fatal("expected error for duplicate registration")
+	}
+
+	if err := RegisterWithKey[*depA](c, "depAKey", Transient, func() *depA { return &depA{} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	if err := RegisterWithKey[*depA](c, "depAKey", Transient, func() *depA { return &depA{} }); err == nil {
+		t.Fatal("expected error for duplicate registration")
+	}
+}
+
+func TestContainer_ResolveWithKey_CustomKey(t *testing.T) {
+	c := NewContainer()
+	ctx := c.NewContext()
+
+	if err := RegisterWithKey[*depA](c, "custom.key", Transient, func() *depA { return &depA{name: "custom"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	instance := ResolveWithKey[*depA](c, "custom.key", ctx)
+	if instance == nil || instance.name != "custom" {
+		t.Fatal("expected to resolve instance by custom key")
+	}
+}
+
+func TestContainer_Validate_MissingDependency(t *testing.T) {
+	c := NewContainer()
+
+	if err := Register[*depC](c, Transient, func(a *depA, b *depB) *depC { return &depC{a: a, b: b} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	if err := Register[*depA](c, Transient, func() *depA { return &depA{name: "a"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected validation error for missing dependency")
+	}
+}
+
+func TestContainer_Validate_AllDependenciesRegistered(t *testing.T) {
+	c := NewContainer()
+
+	if err := Register[*depA](c, Transient, func() *depA { return &depA{name: "a"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	if err := Register[*depB](c, Transient, func() *depB { return &depB{name: "b"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	if err := Register[*depC](c, Transient, func(a *depA, b *depB) *depC { return &depC{a: a, b: b} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	if err := c.Validate(); err != nil {
+		t.Fatalf("expected no validation error, got: %v", err)
 	}
 }
 
@@ -225,10 +359,10 @@ func TestResolve_NilContextUsesBackground(t *testing.T) {
 	c := NewContainer()
 	created := 0
 
-	if err := Register[*depA](c, func() *depA {
+	if err := Register[*depA](c, Singleton, func() *depA {
 		created++
 		return &depA{name: "bg"}
-	}, Singleton); err != nil {
+	}); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
 
@@ -247,9 +381,9 @@ func TestContainer_CloseContext_ShutdownsScopedInstances(t *testing.T) {
 	ctx := c.NewContext()
 	called := int32(0)
 
-	if err := Register[*listenerDep](c, func() *listenerDep {
+	if err := Register[*listenerDep](c, Scoped, func() *listenerDep {
 		return &listenerDep{called: &called}
-	}, Scoped); err != nil {
+	}); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
 
@@ -269,9 +403,9 @@ func TestContainer_Shutdown_CollectsContextErrors(t *testing.T) {
 	ctx1 := c.NewContext()
 	ctx2 := c.NewContext()
 
-	if err := Register[*listenerErr](c, func() *listenerErr {
+	if err := Register[*listenerErr](c, Scoped, func() *listenerErr {
 		return &listenerErr{}
-	}, Scoped); err != nil {
+	}); err != nil {
 		t.Fatalf("unexpected register error: %v", err)
 	}
 
@@ -281,5 +415,55 @@ func TestContainer_Shutdown_CollectsContextErrors(t *testing.T) {
 	errs := c.Shutdown()
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d", len(errs))
+	}
+}
+
+func TestNewContainer_BackgroundContextInitialized(t *testing.T) {
+	c := NewContainer()
+
+	bg1 := c.BackgroundContext()
+	if bg1 == nil {
+		t.Fatal("expected background context to be initialized")
+	}
+
+	bg2 := c.BackgroundContext()
+	if bg2 == nil {
+		t.Fatal("expected background context to be non-nil on subsequent call")
+	}
+
+	if bg1.ID() != bg2.ID() {
+		t.Fatal("expected background context to be stable across calls")
+	}
+}
+
+func TestNewContainer_ResolvesContainerSelf(t *testing.T) {
+	c := NewContainer()
+
+	got := Resolve[Container](c, nil)
+	if got == nil {
+		t.Fatal("expected to resolve container instance")
+	}
+	if got != c {
+		t.Fatal("expected resolved container to be the same instance")
+	}
+}
+
+func TestContainer_Shutdown_ResetsBackgroundContext(t *testing.T) {
+	c := NewContainer()
+
+	bg1 := c.BackgroundContext()
+	if bg1 == nil {
+		t.Fatal("expected background context to be initialized")
+	}
+
+	_ = c.Shutdown()
+
+	bg2 := c.BackgroundContext()
+	if bg2 == nil {
+		t.Fatal("expected background context to be re-initialized after shutdown")
+	}
+
+	if bg1.ID() == bg2.ID() {
+		t.Fatal("expected background context to be reset after shutdown")
 	}
 }

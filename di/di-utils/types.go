@@ -18,5 +18,24 @@ func NameOf[T interface{}]() string {
 
 // NameOfType returns the fully qualified name of a reflect.Type.
 func NameOfType(t reflect.Type) string {
-	return fmt.Sprintf("%s/%s", t.PkgPath(), t.Name())
+	var pkgPath string
+	var tName string
+
+	if t.Kind() == reflect.Ptr {
+		pkgPath = t.Elem().PkgPath()
+		tName = t.Elem().Name()
+	} else {
+		pkgPath = t.PkgPath()
+		tName = t.Name()
+	}
+
+	if tName == "" {
+		return t.String()
+	}
+
+	if pkgPath == "" {
+		return tName
+	}
+
+	return fmt.Sprintf("%s/%s", pkgPath, tName)
 }
