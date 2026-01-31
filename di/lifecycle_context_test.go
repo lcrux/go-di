@@ -45,7 +45,9 @@ func TestLifecycleContext_SetAndGetInstance(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	expected := reflect.ValueOf("test-instance")
 
-	ctx.SetInstance(key, expected)
+	if err := ctx.SetInstance(key, expected); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	val, exists := ctx.GetInstance(key)
 
 	if !exists {
@@ -64,8 +66,12 @@ func TestLifecycleContext_SetInstance_Overwrite(t *testing.T) {
 	first := reflect.ValueOf("first")
 	second := reflect.ValueOf("second")
 
-	ctx.SetInstance(key, first)
-	ctx.SetInstance(key, second)
+	if err := ctx.SetInstance(key, first); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
+	if err := ctx.SetInstance(key, second); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	val, exists := ctx.GetInstance(key)
 
 	if !exists {

@@ -65,14 +65,14 @@ type lifecycleContextImpl struct {
 }
 
 // ID returns the unique identifier of the lifecycle context.
-func (ctx *lifecycleContextImpl) ID() string {
-	return ctx.id
+func (lctx *lifecycleContextImpl) ID() string {
+	return lctx.id
 }
 
-func (ctx *lifecycleContextImpl) IsClosed() bool {
-	ctx.mutex.RLock()
-	defer ctx.mutex.RUnlock()
-	return ctx.closed
+func (lctx *lifecycleContextImpl) IsClosed() bool {
+	lctx.mutex.RLock()
+	defer lctx.mutex.RUnlock()
+	return lctx.closed
 }
 
 func checkIfCanceled(ctx context.Context) bool {
@@ -96,7 +96,7 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 	diutils.DebugLog("[Context ID: %s] Closing lifecycle context...", lctx.ID())
 
 	// If a context is provided, use it; otherwise, use a background context
-	var ctx context.Context = context.Background()
+	ctx := context.Background()
 	if len(ctxs) > 0 {
 		ctx = ctxs[0]
 	}
@@ -194,25 +194,25 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 
 // GetInstance retrieves an instance of the specified service type from the context.
 // Logs the operation and whether the instance was found.
-func (ctx *lifecycleContextImpl) GetInstance(key string) (reflect.Value, bool) {
+func (lctx *lifecycleContextImpl) GetInstance(key string) (reflect.Value, bool) {
 	if key == "" {
-		diutils.DebugLog("[Context ID: %s] GetInstance called with empty service type key", ctx.ID())
+		diutils.DebugLog("[Context ID: %s] GetInstance called with empty service type key", lctx.ID())
 		return reflect.Value{}, false
 	}
-	if ctx.IsClosed() {
-		diutils.DebugLog("[Context ID: %s] Cannot get instance from closed lifecycle context", ctx.ID())
+	if lctx.IsClosed() {
+		diutils.DebugLog("[Context ID: %s] Cannot get instance from closed lifecycle context", lctx.ID())
 		return reflect.Value{}, false
 	}
 
-	ctx.mutex.RLock()
-	defer ctx.mutex.RUnlock()
+	lctx.mutex.RLock()
+	defer lctx.mutex.RUnlock()
 
-	diutils.DebugLog("[Context ID: %s] Getting instance for service type: %v", ctx.ID(), key)
-	instance, exists := ctx.cache[key]
+	diutils.DebugLog("[Context ID: %s] Getting instance for service type: %v", lctx.ID(), key)
+	instance, exists := lctx.cache[key]
 	if exists {
-		diutils.DebugLog("[Context ID: %s] Instance found for service type: %v", ctx.ID(), key)
+		diutils.DebugLog("[Context ID: %s] Instance found for service type: %v", lctx.ID(), key)
 	} else {
-		diutils.DebugLog("[Context ID: %s] No instance found for service type: %v", ctx.ID(), key)
+		diutils.DebugLog("[Context ID: %s] No instance found for service type: %v", lctx.ID(), key)
 	}
 
 	return instance, exists
@@ -222,26 +222,26 @@ func (ctx *lifecycleContextImpl) GetInstance(key string) (reflect.Value, bool) {
 // Logs the operation and confirms the instance has been set.
 //
 // Any existing instance, of the specified type, will be overwritten.
-func (ctx *lifecycleContextImpl) SetInstance(key string, instance reflect.Value) error {
+func (lctx *lifecycleContextImpl) SetInstance(key string, instance reflect.Value) error {
 	if key == "" {
 		return fmt.Errorf("service type key cannot be empty")
 	}
 	if !instance.IsValid() {
 		return fmt.Errorf("instance value is not valid")
 	}
-	if ctx.IsClosed() {
+	if lctx.IsClosed() {
 		return fmt.Errorf("cannot set instance on closed lifecycle context")
 	}
 
-	ctx.mutex.Lock()
-	defer ctx.mutex.Unlock()
+	lctx.mutex.Lock()
+	defer lctx.mutex.Unlock()
 
-	diutils.DebugLog("[Context ID: %s] Setting instance for service type: %v", ctx.ID(), key)
-	if _, exists := ctx.cache[key]; exists {
-		diutils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", ctx.ID(), key)
+	diutils.DebugLog("[Context ID: %s] Setting instance for service type: %v", lctx.ID(), key)
+	if _, exists := lctx.cache[key]; exists {
+		diutils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", lctx.ID(), key)
 	}
 
-	ctx.cache[key] = instance
-	diutils.DebugLog("[Context ID: %s] Instance set for service type: %v", ctx.ID(), key)
+	lctx.cache[key] = instance
+	diutils.DebugLog("[Context ID: %s] Instance set for service type: %v", lctx.ID(), key)
 	return nil
 }

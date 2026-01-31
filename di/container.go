@@ -103,7 +103,7 @@ func (c *containerImpl) RemoveContext(lctx LifecycleContext) error {
 // If the provided context is nil, a background context will be used.
 func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 	// If no context is provided, use a background context
-	var ctx context.Context = context.Background()
+	ctx := context.Background()
 	if len(ctxs) > 0 {
 		ctx = ctxs[0]
 	}
@@ -450,7 +450,9 @@ func (c *containerImpl) resolveDependencies(dependencies []*containerEntry, ctx 
 			}
 
 			// Persist the created instance based on its lifecycle scope
-			c.persistInstance(ctx, entry, instance)
+			if err := c.persistInstance(ctx, entry, instance); err != nil {
+				return zero, err
+			}
 
 			diutils.DebugLog("Created new instance for: %s", depType.String())
 			return instance, nil
@@ -501,7 +503,9 @@ func (c *containerImpl) persistInstance(ctx LifecycleContext, entry *containerEn
 		bgCtx := c.BackgroundContext()
 		// Store the singleton instance in the container background lifecycle context if it doesn't already exist
 		if _, exists := bgCtx.GetInstance(entry.key); !exists {
-			bgCtx.SetInstance(entry.key, instance)
+			if err := bgCtx.SetInstance(entry.key, instance); err != nil {
+				return err
+			}
 		}
 	case Scoped:
 		// For Scoped scope, use the provided lifecycle context or fall back to the container's background lifecycle context
