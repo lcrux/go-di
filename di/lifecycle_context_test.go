@@ -88,7 +88,9 @@ func TestLifecycleContext_Shutdown_RemovesNonListenerInstances(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf("test-instance")
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	ctx.Shutdown()
 
 	_, exists := ctx.GetInstance(key)
@@ -104,7 +106,9 @@ func TestLifecycleContext_Shutdown_InvokesLifecycleListener(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerOk{called: &called})
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	errs := ctx.Shutdown()
 
 	if len(errs) != 0 {
@@ -126,7 +130,9 @@ func TestLifecycleContext_Shutdown_CollectsErrors(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerErr{})
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	errs := ctx.Shutdown()
 
 	if len(errs) != 1 {
@@ -145,7 +151,9 @@ func TestLifecycleContext_Shutdown_RecoversFromPanics(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerPanic{})
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	errs := ctx.Shutdown()
 
 	if len(errs) != 1 {
@@ -174,7 +182,9 @@ func TestLifecycleContext_Shutdown_ContextCanceledBeforeStart(t *testing.T) {
 	called := int32(0)
 	instance := reflect.ValueOf(&listenerOk{called: &called})
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	cancel()
