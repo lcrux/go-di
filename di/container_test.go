@@ -1,6 +1,7 @@
 package di
 
 import (
+	"context"
 	"sync/atomic"
 	"testing"
 )
@@ -39,7 +40,7 @@ type listenerDep struct {
 	called *int32
 }
 
-func (l *listenerDep) EndLifecycle() error {
+func (l *listenerDep) EndLifecycle(_ ...context.Context) error {
 	if l.called != nil {
 		atomic.AddInt32(l.called, 1)
 	}
@@ -79,7 +80,7 @@ func TestContainer_Validate_AllDependenciesRegistered(t *testing.T) {
 	}
 }
 
-func TestContainer_CloseContext_ShutdownsScopedInstances(t *testing.T) {
+func TestContainer_RemoveContext_ShutsDownLifecycleContext(t *testing.T) {
 	c := NewContainer()
 	ctx := c.NewContext()
 	called := int32(0)
@@ -94,12 +95,12 @@ func TestContainer_CloseContext_ShutdownsScopedInstances(t *testing.T) {
 		t.Fatalf("unexpected resolve error: %v", err)
 	}
 
-	errs := c.CloseContext(ctx)
-	if len(errs) != 0 {
-		t.Fatalf("expected no errors, got %d", len(errs))
+	if err := c.RemoveContext(ctx); err != nil {
+		t.Fatalf("unexpected remove context error: %v", err)
 	}
+
 	if called != 1 {
-		t.Fatalf("expected EndLifecycle to be called once, got %d", called)
+		t.Fatalf("expected EndLifecycle to be called after RemoveContext, got %d", called)
 	}
 }
 
@@ -162,5 +163,46 @@ func TestContainer_Shutdown_ResetsBackgroundContext(t *testing.T) {
 
 	if bg1.ID() == bg2.ID() {
 		t.Fatal("expected background context to be reset after shutdown")
+	}
+}
+
+func TestContainer_Shutdown_CanceledContextSkipsLifecycleEnd(t *testing.T) {
+	c := NewContainer()
+	ctx := c.NewContext()
+	called := int32(0)
+
+	if err := Register[*listenerDep](c, Scoped, func() *listenerDep {
+		return &listenerDep{called: &called}
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	if _, err := Resolve[*listenerDep](c, ctx); err != nil {
+		t.Fatalf("unexpected resolve error: %v", err)
+	}
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	errs := c.Shutdown(cancelCtx)
+	if len(errs) == 0 {
+		t.Fatalf("expected at most 1 error, got %d", len(errs))
+	}
+	if called != 0 {
+		t.Fatalf("expected EndLifecycle not to be called, got %d", called)
+	}
+}
+
+func TestContainer_Validate_IgnoresContainerAndContextDependencies(t *testing.T) {
+	c := NewContainer()
+
+	if err := Register[*depWithContainerAndContext](c, Transient, func(c Container, ctx LifecycleContext) *depWithContainerAndContext {
+		return &depWithContainerAndContext{c: c, ctx: ctx}
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	if err := c.Validate(); err != nil {
+		t.Fatalf("expected validation to ignore container and context dependencies, got: %v", err)
 	}
 }

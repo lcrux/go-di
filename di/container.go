@@ -1,6 +1,8 @@
 package di
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -21,9 +23,9 @@ var lifecycleContextReflectedKey = diutils.NameOfType(diutils.TypeOf[LifecycleCo
 // Container represents a dependency injection container that manages the lifecycle of services.
 type Container interface {
 	NewContext() LifecycleContext
-	CloseContext(ctx LifecycleContext) []error
+	RemoveContext(ctx LifecycleContext) error
 	BackgroundContext() LifecycleContext
-	Shutdown() []error
+	Shutdown(...context.Context) []error
 	Resolve(key string, ctx LifecycleContext) (interface{}, error)
 	Register(serviceType reflect.Type, key string, scope LifecycleScope, factoryFn interface{}) error
 	Validate() error
@@ -76,62 +78,97 @@ func (c *containerImpl) BackgroundContext() LifecycleContext {
 	return c.lifecycleContexts[backgroundContextKey]
 }
 
-// CloseContext closes the given lifecycle context and removes it from the container.
-// It returns a slice of errors encountered during the shutdown of the context, if any.
-func (c *containerImpl) CloseContext(ctx LifecycleContext) []error {
-	if ctx == nil {
-		return []error{fmt.Errorf("lifecycle context cannot be nil")}
+// RemoveContext removes the given lifecycle context from the container and shuts it down.
+func (c *containerImpl) RemoveContext(lctx LifecycleContext) error {
+	if lctx == nil || lctx.IsClosed() {
+		return nil
 	}
 
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	delete(c.lifecycleContexts, ctx.ID())
-	return ctx.Shutdown()
+	delete(c.lifecycleContexts, lctx.ID())
+	c.mutex.Unlock()
+
+	if errs := lctx.Shutdown(); len(errs) > 0 {
+		return fmt.Errorf(
+			"failed to shutdown lifecycle context %s: %v", lctx.ID(),
+			errors.Join(errs...),
+		)
+	}
+	return nil
 }
 
 // Shutdown gracefully shuts down the container and all its lifecycle contexts.
+//
 // It returns a slice of errors encountered during the shutdown process, if any.
-func (c *containerImpl) Shutdown() []error {
+// If the provided context is nil, a background context will be used.
+func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
+	// If no context is provided, use a background context
+	ctx := context.Background()
+	if len(ctxs) > 0 {
+		ctx = ctxs[0]
+	}
+
+	// errors stores the errors encountered during the shutdown process
+	var errors []error
+	var errorsMutex sync.Mutex
+	setErrors := func(errs ...error) {
+		errorsMutex.Lock()
+		defer errorsMutex.Unlock()
+		errors = append(errors, errs...)
+	}
+
+	if checkIfCanceled(ctx) {
+		setErrors(fmt.Errorf("shutdown canceled before starting"))
+		return errors
+	}
+
+	diutils.DebugLog("Shutting down container and all lifecycle contexts...")
+
 	semaphore := diutils.NewSemaphore(10)
 	defer semaphore.Done()
 
-	wg := sync.WaitGroup{}
-	var allErrors []error
-	var allErrorsMux sync.Mutex
-
 	c.mutex.RLock()
-	lcKeys := make([]string, 0, len(c.lifecycleContexts))
-	for k := range c.lifecycleContexts {
-		lcKeys = append(lcKeys, k)
-	}
+	lcKeys := diutils.GetMapKeys(c.lifecycleContexts)
 	c.mutex.RUnlock()
 
-	for _, key := range lcKeys {
+	wg := sync.WaitGroup{}
+	for _, lck := range lcKeys {
+		if checkIfCanceled(ctx) {
+			setErrors(fmt.Errorf("shutdown canceled before starting"))
+			return errors
+		}
+
+		semaphore.Acquire()
+
 		c.mutex.RLock()
-		ctx := c.lifecycleContexts[key]
+		lcc := c.lifecycleContexts[lck]
 		c.mutex.RUnlock()
 
 		wg.Add(1)
-		semaphore.Acquire()
-		go func(ctx LifecycleContext) {
+		go func(lc LifecycleContext) {
 			defer wg.Done()
 			defer semaphore.Release()
-			errors := ctx.Shutdown()
 
-			allErrorsMux.Lock()
-			allErrors = append(allErrors, errors...)
-			allErrorsMux.Unlock()
-		}(ctx)
+			if checkIfCanceled(ctx) {
+				setErrors(fmt.Errorf("shutdown canceled for lifecycle context %s", lc.ID()))
+				return
+			}
+
+			errors := lc.Shutdown(ctx)
+			setErrors(errors...)
+		}(lcc)
 	}
 	wg.Wait()
 
-	// Reset the lifecycle contexts after shutdown, keeps a clean background context to avoid nil references
-	c.mutex.Lock()
-	c.lifecycleContexts = make(map[string]LifecycleContext)
-	c.lifecycleContexts[backgroundContextKey] = NewLifecycleContext()
-	c.mutex.Unlock()
+	if !checkIfCanceled(ctx) {
+		// Reset the lifecycle contexts after shutdown, keeps a clean background context to avoid nil references
+		c.mutex.Lock()
+		c.lifecycleContexts = make(map[string]LifecycleContext)
+		c.lifecycleContexts[backgroundContextKey] = NewLifecycleContext()
+		c.mutex.Unlock()
+	}
 
-	return allErrors
+	return errors
 }
 
 // Register registers a service with the given type, key, scope, and factory function in the container.
@@ -413,7 +450,9 @@ func (c *containerImpl) resolveDependencies(dependencies []*containerEntry, ctx 
 			}
 
 			// Persist the created instance based on its lifecycle scope
-			c.persistInstance(ctx, entry, instance)
+			if err := c.persistInstance(ctx, entry, instance); err != nil {
+				return zero, err
+			}
 
 			diutils.DebugLog("Created new instance for: %s", depType.String())
 			return instance, nil
@@ -437,7 +476,7 @@ func (c *containerImpl) loadInstance(ctx LifecycleContext, entry *containerEntry
 		// For Singleton scope, use the container's background lifecycle context
 		bgCtx := c.BackgroundContext()
 		// If the instance is already cached in the container background lifecycle context, return it
-		if cached, found := bgCtx.GetInstance(entry.key); found {
+		if cached, exists := bgCtx.GetInstance(entry.key); exists {
 			return cached, true
 		}
 	case Scoped:
@@ -457,14 +496,16 @@ func (c *containerImpl) loadInstance(ctx LifecycleContext, entry *containerEntry
 }
 
 // persistInstance stores the given instance in the appropriate cache based on its scope.
-func (c *containerImpl) persistInstance(ctx LifecycleContext, entry *containerEntry, instance reflect.Value) {
+func (c *containerImpl) persistInstance(ctx LifecycleContext, entry *containerEntry, instance reflect.Value) error {
 	switch entry.scope {
 	case Singleton:
 		// For Singleton scope, use the container's background lifecycle context
 		bgCtx := c.BackgroundContext()
 		// Store the singleton instance in the container background lifecycle context if it doesn't already exist
 		if _, exists := bgCtx.GetInstance(entry.key); !exists {
-			bgCtx.SetInstance(entry.key, instance)
+			if err := bgCtx.SetInstance(entry.key, instance); err != nil {
+				return err
+			}
 		}
 	case Scoped:
 		// For Scoped scope, use the provided lifecycle context or fall back to the container's background lifecycle context
@@ -472,8 +513,11 @@ func (c *containerImpl) persistInstance(ctx LifecycleContext, entry *containerEn
 			ctx = c.BackgroundContext()
 		}
 		// Store the scoped instance in the current lifecycle context
-		ctx.SetInstance(entry.key, instance)
+		if err := ctx.SetInstance(entry.key, instance); err != nil {
+			return err
+		}
 	case Transient:
 		// For Transient scope, do not cache the instance; it will be created anew each time
 	}
+	return nil
 }

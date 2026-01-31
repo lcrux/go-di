@@ -1,6 +1,7 @@
 package di
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sync/atomic"
@@ -21,20 +22,20 @@ type listenerOk struct {
 	called *int32
 }
 
-func (l *listenerOk) EndLifecycle() error {
+func (l *listenerOk) EndLifecycle(_ ...context.Context) error {
 	atomic.AddInt32(l.called, 1)
 	return nil
 }
 
 type listenerErr struct{}
 
-func (l *listenerErr) EndLifecycle() error {
+func (l *listenerErr) EndLifecycle(_ ...context.Context) error {
 	return errors.New("end lifecycle failed")
 }
 
 type listenerPanic struct{}
 
-func (l *listenerPanic) EndLifecycle() error {
+func (l *listenerPanic) EndLifecycle(_ ...context.Context) error {
 	panic("boom")
 }
 
@@ -44,7 +45,9 @@ func TestLifecycleContext_SetAndGetInstance(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	expected := reflect.ValueOf("test-instance")
 
-	ctx.SetInstance(key, expected)
+	if err := ctx.SetInstance(key, expected); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	val, exists := ctx.GetInstance(key)
 
 	if !exists {
@@ -63,8 +66,12 @@ func TestLifecycleContext_SetInstance_Overwrite(t *testing.T) {
 	first := reflect.ValueOf("first")
 	second := reflect.ValueOf("second")
 
-	ctx.SetInstance(key, first)
-	ctx.SetInstance(key, second)
+	if err := ctx.SetInstance(key, first); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
+	if err := ctx.SetInstance(key, second); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	val, exists := ctx.GetInstance(key)
 
 	if !exists {
@@ -81,7 +88,9 @@ func TestLifecycleContext_Shutdown_RemovesNonListenerInstances(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf("test-instance")
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	ctx.Shutdown()
 
 	_, exists := ctx.GetInstance(key)
@@ -97,7 +106,9 @@ func TestLifecycleContext_Shutdown_InvokesLifecycleListener(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerOk{called: &called})
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	errs := ctx.Shutdown()
 
 	if len(errs) != 0 {
@@ -119,7 +130,9 @@ func TestLifecycleContext_Shutdown_CollectsErrors(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerErr{})
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	errs := ctx.Shutdown()
 
 	if len(errs) != 1 {
@@ -127,7 +140,7 @@ func TestLifecycleContext_Shutdown_CollectsErrors(t *testing.T) {
 	}
 
 	// Instance should remain in cache when EndLifecycle returns error
-	if _, exists := ctx.GetInstance(key); !exists {
+	if _, exists := ctx.GetInstance(key); exists {
 		t.Fatal("Expected instance to remain after EndLifecycle error")
 	}
 }
@@ -138,7 +151,9 @@ func TestLifecycleContext_Shutdown_RecoversFromPanics(t *testing.T) {
 	key := diutils.NameOfType(serviceType)
 	instance := reflect.ValueOf(&listenerPanic{})
 
-	ctx.SetInstance(key, instance)
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
 	errs := ctx.Shutdown()
 
 	if len(errs) != 1 {
@@ -146,7 +161,7 @@ func TestLifecycleContext_Shutdown_RecoversFromPanics(t *testing.T) {
 	}
 
 	// Instance should remain in cache when EndLifecycle panics
-	if _, exists := ctx.GetInstance(key); !exists {
+	if _, exists := ctx.GetInstance(key); exists {
 		t.Fatal("Expected instance to remain after EndLifecycle panic")
 	}
 }
@@ -157,5 +172,31 @@ func TestLifecycleContext_Shutdown_EmptyContext(t *testing.T) {
 	errs := ctx.Shutdown()
 	if len(errs) != 0 {
 		t.Fatalf("Expected no errors, got %d", len(errs))
+	}
+}
+
+func TestLifecycleContext_Shutdown_ContextCanceledBeforeStart(t *testing.T) {
+	ctx := NewLifecycleContext()
+	serviceType := reflect.TypeOf(&listenerOk{})
+	key := diutils.NameOfType(serviceType)
+	called := int32(0)
+	instance := reflect.ValueOf(&listenerOk{called: &called})
+
+	if err := ctx.SetInstance(key, instance); err != nil {
+		t.Fatalf("Failed to set instance: %v", err)
+	}
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	errs := ctx.Shutdown(cancelCtx)
+	if len(errs) != 1 {
+		t.Fatalf("Expected one error, got %d", len(errs))
+	}
+	if atomic.LoadInt32(&called) != 0 {
+		t.Fatalf("Expected EndLifecycle not to be called, got %d", called)
+	}
+	if _, exists := ctx.GetInstance(key); !exists {
+		t.Fatal("Expected instance to remain after canceled shutdown")
 	}
 }
