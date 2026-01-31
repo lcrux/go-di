@@ -1,6 +1,7 @@
 package di
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sync/atomic"
@@ -21,20 +22,20 @@ type listenerOk struct {
 	called *int32
 }
 
-func (l *listenerOk) EndLifecycle() error {
+func (l *listenerOk) EndLifecycle(_ ...context.Context) error {
 	atomic.AddInt32(l.called, 1)
 	return nil
 }
 
 type listenerErr struct{}
 
-func (l *listenerErr) EndLifecycle() error {
+func (l *listenerErr) EndLifecycle(_ ...context.Context) error {
 	return errors.New("end lifecycle failed")
 }
 
 type listenerPanic struct{}
 
-func (l *listenerPanic) EndLifecycle() error {
+func (l *listenerPanic) EndLifecycle(_ ...context.Context) error {
 	panic("boom")
 }
 
@@ -127,7 +128,7 @@ func TestLifecycleContext_Shutdown_CollectsErrors(t *testing.T) {
 	}
 
 	// Instance should remain in cache when EndLifecycle returns error
-	if _, exists := ctx.GetInstance(key); !exists {
+	if _, exists := ctx.GetInstance(key); exists {
 		t.Fatal("Expected instance to remain after EndLifecycle error")
 	}
 }
@@ -146,7 +147,7 @@ func TestLifecycleContext_Shutdown_RecoversFromPanics(t *testing.T) {
 	}
 
 	// Instance should remain in cache when EndLifecycle panics
-	if _, exists := ctx.GetInstance(key); !exists {
+	if _, exists := ctx.GetInstance(key); exists {
 		t.Fatal("Expected instance to remain after EndLifecycle panic")
 	}
 }
@@ -157,5 +158,29 @@ func TestLifecycleContext_Shutdown_EmptyContext(t *testing.T) {
 	errs := ctx.Shutdown()
 	if len(errs) != 0 {
 		t.Fatalf("Expected no errors, got %d", len(errs))
+	}
+}
+
+func TestLifecycleContext_Shutdown_ContextCanceledBeforeStart(t *testing.T) {
+	ctx := NewLifecycleContext()
+	serviceType := reflect.TypeOf(&listenerOk{})
+	key := diutils.NameOfType(serviceType)
+	called := int32(0)
+	instance := reflect.ValueOf(&listenerOk{called: &called})
+
+	ctx.SetInstance(key, instance)
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	errs := ctx.Shutdown(cancelCtx)
+	if len(errs) != 1 {
+		t.Fatalf("Expected one error, got %d", len(errs))
+	}
+	if atomic.LoadInt32(&called) != 0 {
+		t.Fatalf("Expected EndLifecycle not to be called, got %d", called)
+	}
+	if _, exists := ctx.GetInstance(key); !exists {
+		t.Fatal("Expected instance to remain after canceled shutdown")
 	}
 }

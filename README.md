@@ -58,12 +58,12 @@ func main() {
     defer container.Shutdown()
 
     // Register the service
-    di.Register[MyService](container, di.Singleton, func() *MyService {
+    di.Register[*MyService](container, di.Singleton, func() *MyService {
         return &MyService{Name: "Hello, go-di!"}
     })
 
     // Resolve the service
-    service, err := di.Resolve[MyService](container, nil)
+    service, err := di.Resolve[*MyService](container, nil)
     if err != nil {
         log.Fatal(err)
     }
@@ -84,7 +84,7 @@ type MyService struct {}
 container := di.NewContainer()
 defer container.Shutdown()
 
-di.Register[MyService](container, di.Singleton, func() *MyService {
+di.Register[*MyService](container, di.Singleton, func() *MyService {
     return &MyService{}
 })
 ```
@@ -94,7 +94,7 @@ di.Register[MyService](container, di.Singleton, func() *MyService {
 To resolve a registered service, use the `Resolve` function with a container instance:
 
 ```go
-service, err := di.Resolve[MyService](container, nil)
+service, err := di.Resolve[*MyService](container, nil)
 if err != nil {
     // handle error
 }
@@ -162,8 +162,8 @@ di.Register[*Service](container, di.Transient, func(p RepoPrimary, r RepoReplica
 
 - `NewContainer()` creates a new container with its own background lifecycle context.
 - `Resolve(..., nil)` uses the container’s background context automatically and returns `(T, error)`.
-- `CloseContext(ctx)` triggers lifecycle cleanup for scoped instances and returns any errors.
-- `Shutdown()` closes all contexts and returns any errors from lifecycle cleanup.
+- `RemoveContext(ctx)` triggers lifecycle cleanup for scoped instances and returns any errors.
+- `Shutdown()` closes all contexts and returns a slice of errors from lifecycle cleanup.
 
 ### Using Scoped Contexts
 
@@ -171,9 +171,9 @@ To use scoped instances, create a new lifecycle context from the container:
 
 ```go
 ctx := container.NewContext()
-defer container.CloseContext(ctx)
+defer container.RemoveContext(ctx)
 
-scopedService, err := di.Resolve[MyService](container, ctx)
+scopedService, err := di.Resolve[*MyService](container, ctx)
 if err != nil {
     // handle error
 }
@@ -204,17 +204,17 @@ func main() {
     defer container.Shutdown()
 
     // Register the Database service
-    di.Register[Database](container, di.Singleton, func() *Database {
+    di.Register[*Database](container, di.Singleton, func() *Database {
         return &Database{ConnectionString: "postgres://user:password@localhost/db"}
     })
 
     // Register the UserService with a dependency on Database
-    di.Register[UserService](container, di.Singleton, func(db *Database) *UserService {
+    di.Register[*UserService](container, di.Singleton, func(db *Database) *UserService {
         return &UserService{DB: db}
     })
 
     // Resolve the UserService
-    userService, err := di.Resolve[UserService](container, nil)
+    userService, err := di.Resolve[*UserService](container, nil)
     if err != nil {
         log.Fatal(err)
     }
@@ -231,7 +231,7 @@ invoked when a lifecycle context is closed or the container is shut down.
 ```go
 type Worker struct{}
 
-func (w *Worker) EndLifecycle() error {
+func (w *Worker) EndLifecycle(_ ...context.Context) error {
     // release resources here
     return nil
 }
@@ -247,7 +247,7 @@ ctx := container.NewContext()
 if _, err := di.Resolve[*Worker](container, ctx); err != nil {
     // handle error
 }
-_ = container.CloseContext(ctx) // triggers EndLifecycle on scoped instances
+_ = container.RemoveContext(ctx) // triggers EndLifecycle on scoped instances
 ```
 
 ### Validation
