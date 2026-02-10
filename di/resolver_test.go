@@ -281,6 +281,33 @@ func TestResolve_NilContextUsesBackground(t *testing.T) {
 	}
 }
 
+func TestResolve_NilContextScopedUsesBackground(t *testing.T) {
+	c := NewContainer()
+	created := 0
+
+	if err := Register[*depA](c, Scoped, func() *depA {
+		created++
+		return &depA{name: "scoped-bg"}
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	first, err := Resolve[*depA](c, nil)
+	if err != nil {
+		t.Fatalf("unexpected resolve error: %v", err)
+	}
+	second, err := Resolve[*depA](c, nil)
+	if err != nil {
+		t.Fatalf("unexpected resolve error: %v", err)
+	}
+	if first != second {
+		t.Fatal("expected scoped instance to be reused in background context")
+	}
+	if created != 1 {
+		t.Fatalf("expected factory to be called once, got %d", created)
+	}
+}
+
 func TestResolve_ContainerSelf(t *testing.T) {
 	c := NewContainer()
 
@@ -293,6 +320,22 @@ func TestResolve_ContainerSelf(t *testing.T) {
 	}
 	if got != c {
 		t.Fatal("expected resolved container to be the same instance")
+	}
+}
+
+func TestResolve_LifecycleContextSelf(t *testing.T) {
+	c := NewContainer()
+	ctx := c.NewContext()
+
+	got, err := Resolve[LifecycleContext](c, ctx)
+	if err != nil {
+		t.Fatalf("unexpected resolve error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected to resolve lifecycle context instance")
+	}
+	if got.ID() != ctx.ID() {
+		t.Fatal("expected resolved lifecycle context to be the same instance")
 	}
 }
 
