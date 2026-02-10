@@ -33,12 +33,13 @@ type Container interface {
 
 // containerEntry represents a registered service in the container.
 type containerEntry struct {
-	serviceType     reflect.Type   // The type of the service
-	key             string         // The key associated with the service type
-	factoryFn       reflect.Value  // The factory function to create instances of the service
-	factoryFnParams []reflect.Type // The parameter types of the factory function
-	scope           LifecycleScope // The scope of the service (Transient, Singleton, Scoped)
-	mutex           sync.Mutex     // Mutex to protect access to the container entry
+	serviceType         reflect.Type      // The type of the service
+	key                 string            // The key associated with the service type
+	factoryFn           reflect.Value     // The factory function to create instances of the service
+	factoryFnParams     []reflect.Type    // The parameter types of the factory function
+	scope               LifecycleScope    // The scope of the service (Transient, Singleton, Scoped)
+	mutex               sync.Mutex        // Mutex to protect access to the container entry
+	dependencyTreeCache []*containerEntry // Cache for the dependency tree of this service
 }
 
 // NewContainer creates a new dependency injection container.
@@ -335,6 +336,14 @@ func (c *containerImpl) resolveEntryWithDeps(
 // It performs a depth-first search to determine the order in which services should be resolved.
 // It detects circular dependencies and returns an error if any are found.
 func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error) {
+
+	c.mutex.RLock()
+	if cached := c.registry[key].dependencyTreeCache; cached != nil {
+		c.mutex.RUnlock()
+		return cached, nil
+	}
+	c.mutex.RUnlock()
+
 	seen := make(map[*containerEntry]bool)
 	visiting := make(map[*containerEntry]bool)
 	order := make([]*containerEntry, 0)
@@ -390,6 +399,11 @@ func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error)
 	if err := visit(key); err != nil {
 		return nil, err
 	}
+
+	c.mutex.Lock()
+	c.registry[key].dependencyTreeCache = order
+	c.mutex.Unlock()
+
 	return order, nil
 }
 
