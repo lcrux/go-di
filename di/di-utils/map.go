@@ -2,49 +2,58 @@ package diutils
 
 import "sync"
 
-type Map[K comparable, V any] struct {
+type AsyncMap[K comparable, V any] interface {
+	Set(key K, value V)
+	Get(key K) (V, bool)
+	Delete(key K)
+	Keys() []K
+	Values() []V
+	Cleanup()
+}
+
+type asyncMaper[K comparable, V any] struct {
 	data  map[K]V
 	mutex sync.RWMutex
 }
 
-func NewMap[K comparable, V any]() *Map[K, V] {
-	return &Map[K, V]{
+func NewAsyncMap[K comparable, V any]() AsyncMap[K, V] {
+	return &asyncMaper[K, V]{
 		data: make(map[K]V),
 	}
 }
 
-func (m *Map[K, V]) Set(key K, value V) {
+func (m *asyncMaper[K, V]) Set(key K, value V) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.data[key] = value
 }
 
-func (m *Map[K, V]) Get(key K) (V, bool) {
+func (m *asyncMaper[K, V]) Get(key K) (V, bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	value, exists := m.data[key]
 	return value, exists
 }
 
-func (m *Map[K, V]) Delete(key K) {
+func (m *asyncMaper[K, V]) Delete(key K) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	delete(m.data, key)
 }
 
-func (m *Map[K, V]) Keys() []K {
+func (m *asyncMaper[K, V]) Keys() []K {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	return getMapKeys(m.data)
 }
 
-func (m *Map[K, V]) Values() []V {
+func (m *asyncMaper[K, V]) Values() []V {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	return getMapValues(m.data)
 }
 
-func (m *Map[K, V]) Cleanup() {
+func (m *asyncMaper[K, V]) Cleanup() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.data = make(map[K]V)

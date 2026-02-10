@@ -34,7 +34,7 @@ func NewLifecycleContext() LifecycleContext {
 	diutils.DebugLog("Creating new lifecycle context")
 	ctx := &lifecycleContextImpl{
 		id:    uuid.New().String(),
-		cache: diutils.NewMap[string, reflect.Value](),
+		cache: diutils.NewAsyncMap[string, reflect.Value](),
 	}
 	return ctx
 }
@@ -59,7 +59,7 @@ type LifecycleContext interface {
 // lifecycleContextImpl is the implementation of the LifecycleContext interface.
 type lifecycleContextImpl struct {
 	id     string
-	cache  *diutils.Map[string, reflect.Value]
+	cache  diutils.AsyncMap[string, reflect.Value]
 	mutex  sync.RWMutex
 	closed bool
 }

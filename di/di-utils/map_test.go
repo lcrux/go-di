@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewMap(t *testing.T) {
-	m := NewMap[string, int]()
+	m := NewAsyncMap[string, int]()
 	if m == nil {
 		t.Fatal("NewMap returned nil")
 	}
@@ -15,7 +15,7 @@ func TestNewMap(t *testing.T) {
 }
 
 func TestMapSetAndGet(t *testing.T) {
-	m := NewMap[string, int]()
+	m := NewAsyncMap[string, int]()
 	m.Set("key1", 100)
 
 	value, exists := m.Get("key1")
@@ -33,7 +33,7 @@ func TestMapSetAndGet(t *testing.T) {
 }
 
 func TestMapDelete(t *testing.T) {
-	m := NewMap[string, int]()
+	m := NewAsyncMap[string, int]()
 	m.Set("key1", 100)
 	m.Delete("key1")
 
@@ -44,7 +44,7 @@ func TestMapDelete(t *testing.T) {
 }
 
 func TestMapKeys(t *testing.T) {
-	m := NewMap[string, int]()
+	m := NewAsyncMap[string, int]()
 	m.Set("key1", 100)
 	m.Set("key2", 200)
 
@@ -55,7 +55,7 @@ func TestMapKeys(t *testing.T) {
 }
 
 func TestMapValues(t *testing.T) {
-	m := NewMap[string, int]()
+	m := NewAsyncMap[string, int]()
 	m.Set("key1", 100)
 	m.Set("key2", 200)
 
@@ -66,7 +66,7 @@ func TestMapValues(t *testing.T) {
 }
 
 func TestMapCleanup(t *testing.T) {
-	m := NewMap[string, int]()
+	m := NewAsyncMap[string, int]()
 	m.Set("key1", 100)
 	m.Set("key2", 200)
 

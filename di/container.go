@@ -46,8 +46,8 @@ type containerEntry struct {
 // It initializes the container's registry and lifecycle contexts, including the background context.
 func NewContainer() Container {
 	container := &containerImpl{
-		registry:          diutils.NewMap[string, *containerEntry](),
-		lifecycleContexts: diutils.NewMap[string, LifecycleContext](),
+		registry:          diutils.NewAsyncMap[string, *containerEntry](),
+		lifecycleContexts: diutils.NewAsyncMap[string, LifecycleContext](),
 	}
 	// Create the background lifecycle context
 	container.lifecycleContexts.Set(backgroundContextKey, NewLifecycleContext())
@@ -56,9 +56,9 @@ func NewContainer() Container {
 
 // containerImpl is the concrete implementation of the Container interface.
 type containerImpl struct {
-	registry          *diutils.Map[string, *containerEntry]  // Map to store registered services, keyed by their unique string keys
-	lifecycleContexts *diutils.Map[string, LifecycleContext] // Map to store lifecycle contexts, keyed by their unique string keys (including the background context)
-	mutex             sync.RWMutex                           // Mutex to protect access when registering and validating services
+	registry          diutils.AsyncMap[string, *containerEntry]  // Map to store registered services, keyed by their unique string keys
+	lifecycleContexts diutils.AsyncMap[string, LifecycleContext] // Map to store lifecycle contexts, keyed by their unique string keys (including the background context)
+	mutex             sync.RWMutex                               // Mutex to protect access when registering and validating services
 }
 
 // NewContext creates a new lifecycle context and adds it to the container.
@@ -155,7 +155,7 @@ func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 
 	if !checkIfCanceled(ctx) {
 		// Reset the lifecycle contexts after shutdown, keeps a clean background context to avoid nil references
-		c.lifecycleContexts = diutils.NewMap[string, LifecycleContext]()
+		c.lifecycleContexts = diutils.NewAsyncMap[string, LifecycleContext]()
 		c.lifecycleContexts.Set(backgroundContextKey, NewLifecycleContext())
 	}
 
