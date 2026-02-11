@@ -121,7 +121,7 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 	}
 
 	// Use a semaphore to limit the number of concurrent EndLifecycle calls
-	semaphore := diutils.NewSemaphore(10)
+	semaphore := diutils.NewSemaphore()
 	defer semaphore.Done()
 
 	// Acquire a read lock to safely access the cache and get the keys

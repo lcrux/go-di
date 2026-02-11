@@ -121,7 +121,7 @@ func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 
 	diutils.DebugLog("Shutting down container and all lifecycle contexts...")
 
-	semaphore := diutils.NewSemaphore(10)
+	semaphore := diutils.NewSemaphore()
 	defer semaphore.Done()
 
 	lcKeys := c.lifecycleContexts.Keys()
