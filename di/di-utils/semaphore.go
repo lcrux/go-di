@@ -8,7 +8,7 @@ import (
 var defaultSemaphoreCapacity int = 10
 
 func init() {
-	if envLimit := os.Getenv("GODI_SHUTDOWN_LIMIT"); envLimit != "" {
+	if envLimit := os.Getenv("GODI_SEMAPHORE_CAPACITY"); envLimit != "" {
 		if val, err := strconv.Atoi(envLimit); err == nil && val > 0 {
 			defaultSemaphoreCapacity = val
 		}
