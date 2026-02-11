@@ -5,7 +5,7 @@ import (
 	"strconv"
 )
 
-var defaultSemaphoreCapacity int = 10
+var defaultSemaphoreCapacity = 10
 
 func init() {
 	if envLimit := os.Getenv("GODI_SEMAPHORE_CAPACITY"); envLimit != "" {
