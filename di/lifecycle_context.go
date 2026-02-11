@@ -34,7 +34,7 @@ func NewLifecycleContext() LifecycleContext {
 	diutils.DebugLog("Creating new lifecycle context")
 	ctx := &lifecycleContextImpl{
 		id:    uuid.New().String(),
-		cache: make(map[string]reflect.Value),
+		cache: diutils.NewAsyncMap[string, reflect.Value](),
 	}
 	return ctx
 }
@@ -59,7 +59,7 @@ type LifecycleContext interface {
 // lifecycleContextImpl is the implementation of the LifecycleContext interface.
 type lifecycleContextImpl struct {
 	id     string
-	cache  map[string]reflect.Value
+	cache  diutils.AsyncMap[string, reflect.Value]
 	mutex  sync.RWMutex
 	closed bool
 }
@@ -121,28 +121,17 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 	}
 
 	// Use a semaphore to limit the number of concurrent EndLifecycle calls
-	semaphore := diutils.NewSemaphore(10)
+	semaphore := diutils.NewSemaphore()
 	defer semaphore.Done()
 
-	deleteFromCache := func(key string) {
-		lctx.mutex.Lock()
-		defer lctx.mutex.Unlock()
-		delete(lctx.cache, key)
-	}
-
 	// Acquire a read lock to safely access the cache and get the keys
-	lctx.mutex.RLock()
-	cacheKeys := diutils.GetMapKeys(lctx.cache)
-	lctx.mutex.RUnlock()
+	cacheKeys := lctx.cache.Keys()
 
 	wg := sync.WaitGroup{}
 	for _, k := range cacheKeys {
 		diutils.DebugLog("[Context ID: %s] Deleting instance for service type: %v", lctx.ID(), k)
 
-		// Acquire a read lock to safely access the cache
-		lctx.mutex.RLock()
-		instance, exists := lctx.cache[k]
-		lctx.mutex.RUnlock()
+		instance, exists := lctx.cache.Get(k)
 		if !exists {
 			continue
 		}
@@ -151,7 +140,7 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 		lm, ok := instance.Interface().(LifecycleListener)
 		if !ok {
 			diutils.DebugLog("[Context ID: %s] Instance for service type: %v does not implement LifecycleListener, skipping EndLifecycle", lctx.ID(), k)
-			deleteFromCache(k)
+			lctx.cache.Delete(k)
 			continue
 		}
 
@@ -182,7 +171,7 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 			} else {
 				// Remove the instance from the cache
 				diutils.DebugLog("[Context ID: %s] Removing instance for service type: %v", lctx.ID(), k)
-				deleteFromCache(k)
+				lctx.cache.Delete(k)
 			}
 		}(lm, k, lctx, ctx)
 	}
@@ -208,7 +197,7 @@ func (lctx *lifecycleContextImpl) GetInstance(key string) (reflect.Value, bool) 
 	defer lctx.mutex.RUnlock()
 
 	diutils.DebugLog("[Context ID: %s] Getting instance for service type: %v", lctx.ID(), key)
-	instance, exists := lctx.cache[key]
+	instance, exists := lctx.cache.Get(key)
 	if exists {
 		diutils.DebugLog("[Context ID: %s] Instance found for service type: %v", lctx.ID(), key)
 	} else {
@@ -237,11 +226,11 @@ func (lctx *lifecycleContextImpl) SetInstance(key string, instance reflect.Value
 	defer lctx.mutex.Unlock()
 
 	diutils.DebugLog("[Context ID: %s] Setting instance for service type: %v", lctx.ID(), key)
-	if _, exists := lctx.cache[key]; exists {
+	if _, exists := lctx.cache.Get(key); exists {
 		diutils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", lctx.ID(), key)
 	}
 
-	lctx.cache[key] = instance
+	lctx.cache.Set(key, instance)
 	diutils.DebugLog("[Context ID: %s] Instance set for service type: %v", lctx.ID(), key)
 	return nil
 }

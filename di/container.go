@@ -33,49 +33,48 @@ type Container interface {
 
 // containerEntry represents a registered service in the container.
 type containerEntry struct {
-	serviceType     reflect.Type   // The type of the service
-	key             string         // The key associated with the service type
-	factoryFn       reflect.Value  // The factory function to create instances of the service
-	factoryFnParams []reflect.Type // The parameter types of the factory function
-	scope           LifecycleScope // The scope of the service (Transient, Singleton, Scoped)
-	mutex           sync.Mutex     // Mutex to protect access to the container entry
+	serviceType         reflect.Type      // The type of the service
+	key                 string            // The key associated with the service type
+	factoryFn           reflect.Value     // The factory function to create instances of the service
+	factoryFnParams     []reflect.Type    // The parameter types of the factory function
+	scope               LifecycleScope    // The scope of the service (Transient, Singleton, Scoped)
+	mutex               sync.Mutex        // Mutex to protect access to the container entry
+	dependencyTreeCache []*containerEntry // Cache for the dependency tree of this service
 }
 
 // NewContainer creates a new dependency injection container.
 // It initializes the container's registry and lifecycle contexts, including the background context.
 func NewContainer() Container {
 	container := &containerImpl{
-		registry:          make(map[string]*containerEntry),
-		lifecycleContexts: make(map[string]LifecycleContext),
-		mutex:             sync.RWMutex{},
+		registry:          diutils.NewAsyncMap[string, *containerEntry](),
+		lifecycleContexts: diutils.NewAsyncMap[string, LifecycleContext](),
 	}
 	// Create the background lifecycle context
-	container.lifecycleContexts[backgroundContextKey] = NewLifecycleContext()
+	container.lifecycleContexts.Set(backgroundContextKey, NewLifecycleContext())
 	return container
 }
 
 // containerImpl is the concrete implementation of the Container interface.
 type containerImpl struct {
-	registry          map[string]*containerEntry
-	mutex             sync.RWMutex
-	lifecycleContexts map[string]LifecycleContext
+	registry          diutils.AsyncMap[string, *containerEntry]  // Map to store registered services, keyed by their unique string keys
+	lifecycleContexts diutils.AsyncMap[string, LifecycleContext] // Map to store lifecycle contexts, keyed by their unique string keys (including the background context)
+	mutex             sync.RWMutex                               // Mutex to protect access when registering and validating services
 }
 
 // NewContext creates a new lifecycle context and adds it to the container.
 // It returns the newly created lifecycle context.
 func (c *containerImpl) NewContext() LifecycleContext {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	ctx := NewLifecycleContext()
-	c.lifecycleContexts[ctx.ID()] = ctx
+	c.lifecycleContexts.Set(ctx.ID(), ctx)
 	return ctx
 }
 
 // BackgroundContext returns the background lifecycle context.
 func (c *containerImpl) BackgroundContext() LifecycleContext {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	return c.lifecycleContexts[backgroundContextKey]
+	if value, exists := c.lifecycleContexts.Get(backgroundContextKey); exists {
+		return value
+	}
+	return nil
 }
 
 // RemoveContext removes the given lifecycle context from the container and shuts it down.
@@ -84,9 +83,7 @@ func (c *containerImpl) RemoveContext(lctx LifecycleContext) error {
 		return nil
 	}
 
-	c.mutex.Lock()
-	delete(c.lifecycleContexts, lctx.ID())
-	c.mutex.Unlock()
+	c.lifecycleContexts.Delete(lctx.ID())
 
 	if errs := lctx.Shutdown(); len(errs) > 0 {
 		return fmt.Errorf(
@@ -124,12 +121,10 @@ func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 
 	diutils.DebugLog("Shutting down container and all lifecycle contexts...")
 
-	semaphore := diutils.NewSemaphore(10)
+	semaphore := diutils.NewSemaphore()
 	defer semaphore.Done()
 
-	c.mutex.RLock()
-	lcKeys := diutils.GetMapKeys(c.lifecycleContexts)
-	c.mutex.RUnlock()
+	lcKeys := c.lifecycleContexts.Keys()
 
 	wg := sync.WaitGroup{}
 	for _, lck := range lcKeys {
@@ -140,9 +135,7 @@ func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 
 		semaphore.Acquire()
 
-		c.mutex.RLock()
-		lcc := c.lifecycleContexts[lck]
-		c.mutex.RUnlock()
+		lcc, _ := c.lifecycleContexts.Get(lck)
 
 		wg.Add(1)
 		go func(lc LifecycleContext) {
@@ -162,10 +155,8 @@ func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 
 	if !checkIfCanceled(ctx) {
 		// Reset the lifecycle contexts after shutdown, keeps a clean background context to avoid nil references
-		c.mutex.Lock()
-		c.lifecycleContexts = make(map[string]LifecycleContext)
-		c.lifecycleContexts[backgroundContextKey] = NewLifecycleContext()
-		c.mutex.Unlock()
+		c.lifecycleContexts = diutils.NewAsyncMap[string, LifecycleContext]()
+		c.lifecycleContexts.Set(backgroundContextKey, NewLifecycleContext())
 	}
 
 	return errors
@@ -187,7 +178,7 @@ func (c *containerImpl) Register(serviceType reflect.Type, key string, scope Lif
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if _, exists := c.registry[key]; exists {
+	if _, exists := c.registry.Get(key); exists {
 		return fmt.Errorf("service already registered with key: %s", key)
 	}
 
@@ -213,7 +204,7 @@ func (c *containerImpl) Register(serviceType reflect.Type, key string, scope Lif
 		factoryFnParams: make([]reflect.Type, factoryFnType.NumIn()),
 		scope:           scope,
 	}
-	c.registry[key] = entry
+	c.registry.Set(key, entry)
 
 	// Store the parameter types of the factory function
 	for i := 0; i < factoryFnType.NumIn(); i++ {
@@ -230,13 +221,15 @@ func (c *containerImpl) Validate() error {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	for _, entry := range c.registry {
+	registryEntries := c.registry.Values()
+
+	for _, entry := range registryEntries {
 		for _, dep := range entry.factoryFnParams {
 			depKey := diutils.NameOfType(dep)
 			if depKey == containerReflectedKey || depKey == lifecycleContextReflectedKey {
 				continue
 			}
-			if _, ok := c.registry[depKey]; !ok {
+			if _, ok := c.registry.Get(depKey); !ok {
 				return fmt.Errorf("service %s depends on unregistered type %s",
 					entry.serviceType.String(), dep.String())
 			}
@@ -288,9 +281,7 @@ func (c *containerImpl) resolveSpecial(key string, ctx LifecycleContext) (interf
 // getEntry retrieves the container entry for the given key.
 // It returns an error if the entry does not exist.
 func (c *containerImpl) getEntry(key string) (*containerEntry, error) {
-	c.mutex.RLock()
-	entry, exists := c.registry[key]
-	c.mutex.RUnlock()
+	entry, exists := c.registry.Get(key)
 	if !exists {
 		return nil, fmt.Errorf("service with key '%s' not registered", key)
 	}
@@ -335,6 +326,10 @@ func (c *containerImpl) resolveEntryWithDeps(
 // It performs a depth-first search to determine the order in which services should be resolved.
 // It detects circular dependencies and returns an error if any are found.
 func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error) {
+
+	if entry, exists := c.registry.Get(key); exists && entry.dependencyTreeCache != nil {
+		return entry.dependencyTreeCache, nil
+	}
 	seen := make(map[*containerEntry]bool)
 	visiting := make(map[*containerEntry]bool)
 	order := make([]*containerEntry, 0)
@@ -362,9 +357,7 @@ func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error)
 		}
 
 		// Retrieve the container entry for the current key
-		c.mutex.RLock()
-		entry, exists := c.registry[k]
-		c.mutex.RUnlock()
+		entry, exists := c.registry.Get(k)
 		if !exists {
 			return fmt.Errorf("service not found: %s", k)
 		}
@@ -390,6 +383,11 @@ func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error)
 	if err := visit(key); err != nil {
 		return nil, err
 	}
+
+	if entry, exists := c.registry.Get(key); exists {
+		entry.dependencyTreeCache = order
+	}
+
 	return order, nil
 }
 
