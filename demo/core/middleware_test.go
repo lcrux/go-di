@@ -21,7 +21,7 @@ func TestChain(t *testing.T) {
 		}
 	}
 
-	final := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	final := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		order = append(order, "final")
 		w.WriteHeader(http.StatusOK)
 	})

@@ -1,4 +1,4 @@
-package customErrors
+package demoerrors
 
 type NotFoundError struct {
 	Message string

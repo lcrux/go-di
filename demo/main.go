@@ -4,13 +4,14 @@ import (
 	"context"
 	"demo/controllers"
 	"demo/core"
+	demoutils "demo/demo_utils"
 	"demo/middlewares"
 	"demo/repositories"
 	"demo/services"
-	"demo/utils"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/lcrux/go-di/di"
@@ -71,10 +72,12 @@ func main() {
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: middleware(r.Handler()),
+		// Set a timeout for reading the headers of incoming requests, to prevent slowloris attacks
+		ReadHeaderTimeout: 2 * time.Second,
 	}
 
 	// Set up a shutdown handler to gracefully shut down the server and DI container when an interrupt signal is received.
-	_ = utils.ShutdownHandler(func() {
+	_ = demoutils.ShutdownHandler(func() {
 		log.Println("Shutting down DI lifecycle contexts...")
 		if err := container.Shutdown(); err != nil {
 			log.Printf("Error during DI shutdown: %v", err)
@@ -97,20 +100,20 @@ func main() {
 func registerServices(container di.Container) error {
 	todoServiceKey := "todo-service"
 	if err := di.RegisterWithKey[services.TodoService](container, todoServiceKey, di.Singleton, services.NewTodoService); err != nil {
-		return fmt.Errorf("Failed to register service with key %s: %v", todoServiceKey, err)
+		return fmt.Errorf("failed to register service with key %s: %v", todoServiceKey, err)
 	}
 	if err := di.Register[repositories.TodoRepository](container, di.Singleton, repositories.NewTodoRepository); err != nil {
-		return fmt.Errorf("Failed to register TodoRepository: %v", err)
+		return fmt.Errorf("failed to register TodoRepository: %v", err)
 	}
 	err := di.Register[controllers.TodoController](
 		container, di.Scoped,
 		func(c di.Container, ctx di.LifecycleContext) controllers.TodoController {
-			todoService := di.MustResolveWithKey[services.TodoService](container, todoServiceKey, ctx)
+			todoService := di.MustResolveWithKey[services.TodoService](c, todoServiceKey, ctx)
 			return controllers.NewTodoController(todoService)
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Failed to register TodoController: %v", err)
+		return fmt.Errorf("failed to register TodoController: %v", err)
 	}
 
 	return nil

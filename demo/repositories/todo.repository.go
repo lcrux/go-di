@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	customErrors "demo/custom-errors"
+	demoerrors "demo/custom-errors"
 	"demo/models"
 	"fmt"
 	"sync"
@@ -14,12 +14,12 @@ var todosMutex = sync.RWMutex{}
 var todos map[uint32]*models.Todo = make(map[uint32]*models.Todo)
 
 func init() {
-	var todoId uint32
-	todoId = uuid.New().ID()
-	todos[todoId] = &models.Todo{ID: todoId, Title: "Demo Todo " + fmt.Sprint(todoId), Done: false, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	var todoID uint32
+	todoID = uuid.New().ID()
+	todos[todoID] = &models.Todo{ID: todoID, Title: "Demo Todo " + fmt.Sprint(todoID), Done: false, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 
-	todoId = uuid.New().ID()
-	todos[todoId] = &models.Todo{ID: todoId, Title: "Demo Todo " + fmt.Sprint(todoId), Done: false, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	todoID = uuid.New().ID()
+	todos[todoID] = &models.Todo{ID: todoID, Title: "Demo Todo " + fmt.Sprint(todoID), Done: false, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 }
 
 func NewTodoRepository() TodoRepository {
@@ -51,7 +51,7 @@ func (r *TodoRepositoryImpl) CreateTodo(todo *models.CreateTodoRequest) (models.
 	defer todosMutex.Unlock()
 
 	if todo == nil {
-		return models.Todo{}, customErrors.NewValidationError("todo data is missing")
+		return models.Todo{}, demoerrors.NewValidationError("todo data is missing")
 	}
 
 	newTodo := &models.Todo{
@@ -74,7 +74,7 @@ func (r *TodoRepositoryImpl) CloseTodo(id uint32) (models.Todo, error) {
 
 	todo, ok := todos[id]
 	if !ok {
-		return models.Todo{}, customErrors.NewNotFoundError("not found")
+		return models.Todo{}, demoerrors.NewNotFoundError("not found")
 	}
 
 	// Mark the todo as done

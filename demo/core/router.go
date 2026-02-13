@@ -10,7 +10,7 @@ import (
 )
 
 // DO NOT confuse with CORS allowed methods
-var routerHttpMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
+var routerHTTPMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 // CleanUpTrailingSlash trims spaces and removes trailing slashes from the URL path if it is longer than 1 character.
 func CleanUpTrailingSlash(p string) string {
@@ -21,9 +21,9 @@ func CleanUpTrailingSlash(p string) string {
 	return p
 }
 
-// JoinUrlPath joins the base path with the provided elements and returns the resulting path.
+// JoinURLPath joins the base path with the provided elements and returns the resulting path.
 // It trims any trailing slashes from the resulting path if it is longer than 1 character.
-func JoinUrlPath(base string, elem ...string) (string, error) {
+func JoinURLPath(base string, elem ...string) (string, error) {
 	if len(elem) == 0 {
 		return CleanUpTrailingSlash(base), nil
 	}
@@ -80,7 +80,7 @@ func (r *serverMuxRouterImpl) Group(group string) ServerMuxRouter {
 		return r
 	}
 
-	newGroup, err := JoinUrlPath("/", r.group, group)
+	newGroup, err := JoinURLPath("/", r.group, group)
 	if err != nil {
 		panic(err)
 	}
@@ -98,7 +98,7 @@ func (r *serverMuxRouterImpl) AddController(c Controller, m Middleware) error {
 
 // AddGet registers a GET route with the given pattern and handler.
 func (r *serverMuxRouterImpl) AddGet(pattern string, handler http.HandlerFunc) error {
-	pattern, err := JoinUrlPath(r.group, pattern)
+	pattern, err := JoinURLPath(r.group, pattern)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (r *serverMuxRouterImpl) AddGet(pattern string, handler http.HandlerFunc) e
 
 // AddPost registers a POST route with the given pattern and handler.
 func (r *serverMuxRouterImpl) AddPost(pattern string, handler http.HandlerFunc) error {
-	pattern, err := JoinUrlPath(r.group, pattern)
+	pattern, err := JoinURLPath(r.group, pattern)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (r *serverMuxRouterImpl) AddPost(pattern string, handler http.HandlerFunc) 
 
 // AddPatch registers a PATCH route with the given pattern and handler.
 func (r *serverMuxRouterImpl) AddPatch(pattern string, handler http.HandlerFunc) error {
-	pattern, err := JoinUrlPath(r.group, pattern)
+	pattern, err := JoinURLPath(r.group, pattern)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (r *serverMuxRouterImpl) AddPatch(pattern string, handler http.HandlerFunc)
 
 // AddDelete registers a DELETE route with the given pattern and handler.
 func (r *serverMuxRouterImpl) AddDelete(pattern string, handler http.HandlerFunc) error {
-	pattern, err := JoinUrlPath(r.group, pattern)
+	pattern, err := JoinURLPath(r.group, pattern)
 	if err != nil {
 		return err
 	}
@@ -137,8 +137,8 @@ func (r *serverMuxRouterImpl) addRouteWithMethod(method string, path string, han
 	if method == "" {
 		return fmt.Errorf("method cannot be empty")
 	}
-	if !slices.Contains(routerHttpMethods, strings.ToUpper(method)) {
-		return fmt.Errorf("method is not supported, must be one of [%s], got %s", strings.Join(routerHttpMethods, ", "), method)
+	if !slices.Contains(routerHTTPMethods, strings.ToUpper(method)) {
+		return fmt.Errorf("method is not supported, must be one of [%s], got %s", strings.Join(routerHTTPMethods, ", "), method)
 	}
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("path cannot be empty")
