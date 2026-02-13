@@ -33,7 +33,7 @@ jobs:
       run: cd di && golangci-lint run
     
     - name: Run Demo lint checks
-      run: cd demo && golangci-lint run
+      run: go work sync && cd demo && golangci-lint run
 
     - name: Run DI tests
       run: cd di && go test ./...
