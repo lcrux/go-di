@@ -16,7 +16,7 @@ func TestCleanUpTrailingSlash(t *testing.T) {
 }
 
 func TestJoinUrlPath(t *testing.T) {
-	got, err := JoinUrlPath("/api/", "/todos/")
+	got, err := JoinURLPath("/api/", "/todos/")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestServerMuxRouter_GroupAndAddGet(t *testing.T) {
 	api := router.Group("api")
 
 	called := false
-	handler := func(w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}

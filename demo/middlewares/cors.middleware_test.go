@@ -12,7 +12,7 @@ func TestCorsMiddleware_AllowsRequest(t *testing.T) {
 	allowedHeaders = "X-Test"
 
 	called := false
-	h := CorsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := CorsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -40,7 +40,7 @@ func TestCorsMiddleware_BlocksOrigin(t *testing.T) {
 	allowedMethods = "GET"
 	allowedHeaders = "X-Test"
 
-	h := CorsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := CorsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -61,7 +61,7 @@ func TestCorsMiddleware_Preflight(t *testing.T) {
 	allowedHeaders = "X-Test"
 
 	called := false
-	h := CorsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := CorsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))

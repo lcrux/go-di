@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"bytes"
-	customErrors "demo/custom-errors"
+	demoerrors "demo/custom-errors"
 	"demo/models"
 	"encoding/json"
 	"net/http"
@@ -59,7 +59,7 @@ func TestTodoController_GetTodos(t *testing.T) {
 }
 
 func TestTodoController_GetTodos_NotFound(t *testing.T) {
-	svc := &fakeTodoService{Err: customErrors.NewNotFoundError("missing")}
+	svc := &fakeTodoService{Err: demoerrors.NewNotFoundError("missing")}
 	controller := NewTodoController(svc)
 
 	rec := httptest.NewRecorder()

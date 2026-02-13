@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"demo/core"
-	customErrors "demo/custom-errors"
+	demoerrors "demo/custom-errors"
 	"demo/models"
 	"demo/services"
 	"encoding/json"
@@ -46,7 +46,7 @@ func (c *todoControllerImpl) RegisterRoutes(router core.ServerMuxRouter, middlew
 	return nil
 }
 
-func (c *todoControllerImpl) GetTodos(w http.ResponseWriter, r *http.Request) {
+func (c *todoControllerImpl) GetTodos(w http.ResponseWriter, _ *http.Request) {
 	// Implement the method for the TodoController interface
 	todos, err := c.todoService.GetTodos()
 	if err != nil {
@@ -86,7 +86,7 @@ func (c *todoControllerImpl) CreateTodo(w http.ResponseWriter, r *http.Request) 
 
 func (c *todoControllerImpl) CloseTodo(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	todoId, err := strconv.ParseUint(idStr, 10, 32)
+	todoID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		log.Printf("Error converting id to integer: %v", err)
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -100,8 +100,8 @@ func (c *todoControllerImpl) CloseTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if todoId != uint64(todo.ID) {
-		log.Printf("ID in path does not match ID in request body: %d != %d", todoId, todo.ID)
+	if todoID != uint64(todo.ID) {
+		log.Printf("ID in path does not match ID in request body: %d != %d", todoID, todo.ID)
 		http.Error(w, "ID mismatch", http.StatusBadRequest)
 		return
 	}
@@ -122,12 +122,12 @@ func (c *todoControllerImpl) CloseTodo(w http.ResponseWriter, r *http.Request) {
 func handleCustomError(w http.ResponseWriter, err error) {
 	log.Printf("Error: %v", err)
 
-	if _, ok := err.(*customErrors.NotFoundError); ok {
+	if _, ok := err.(*demoerrors.NotFoundError); ok {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
 	}
 
-	if _, ok := err.(*customErrors.ValidationError); ok {
+	if _, ok := err.(*demoerrors.ValidationError); ok {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -1,0 +1,14 @@
+// This file is used to define the Go workspace for the project.
+//
+// Run `go work` commands from the root of the workspace.
+//
+// It includes the following modules:
+// - `./`: The DI library module.
+// - `./demo`: The demo application module.
+
+go 1.25.4
+
+use (
+	./
+	./demo
+)
