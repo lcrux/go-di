@@ -108,9 +108,6 @@ func NewLogger(builder func(*LoggerOptions)) Logger {
 
 // buildLoggerOptions merges the provided LoggerOptions with the default options.
 func buildLoggerOptions(options *LoggerOptions) *LoggerOptions {
-
-	log.Printf("Building options, level: %v", options.LogLevel)
-
 	loggerOpts := &LoggerOptions{
 		LogLevel: defaultLogLevel,
 	}
@@ -149,8 +146,6 @@ func (l *loggerImpl) Debugf(format string, v ...interface{}) {
 	if l.options.LogLevel > Debug {
 		return
 	}
-
-	log.Printf("%v", l.options.LogLevel)
 
 	var fn LoggerFunc = defaultDebugLogger
 	if l.options.Debug != nil {
