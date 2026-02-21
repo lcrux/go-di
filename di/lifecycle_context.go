@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	dilogger "github.com/lcrux/go-di/di/di-logger"
 	diutils "github.com/lcrux/go-di/di/di-utils"
 )
 
@@ -31,10 +32,10 @@ type LifecycleListener interface {
 // It allows storing and retrieving instances of services by their type within the context.
 // Once the context is closed, all stored instances are cleaned up and cannot be retrieved.
 func NewLifecycleContext() LifecycleContext {
-	diutils.DebugLog("Creating new lifecycle context")
 	ctx := &lifecycleContextImpl{
-		id:    uuid.New().String(),
-		cache: diutils.NewAsyncMap[string, reflect.Value](),
+		id:     uuid.New().String(),
+		cache:  diutils.NewAsyncMap[string, reflect.Value](),
+		logger: dilogger.NewLogger(nil),
 	}
 	return ctx
 }
@@ -54,6 +55,9 @@ type LifecycleContext interface {
 	// SetInstance stores an instance of the specified service type in the context.
 	// Any existing instance of the specified type will be overwritten.
 	SetInstance(key string, instance reflect.Value) error
+	// SetLogger sets the logger for the lifecycle context.
+	// It returns an error if the provided logger is nil.
+	SetLogger(logger dilogger.Logger) error
 }
 
 // lifecycleContextImpl is the implementation of the LifecycleContext interface.
@@ -62,6 +66,7 @@ type lifecycleContextImpl struct {
 	cache  diutils.AsyncMap[string, reflect.Value]
 	mutex  sync.RWMutex
 	closed bool
+	logger dilogger.Logger
 }
 
 // ID returns the unique identifier of the lifecycle context.
@@ -75,25 +80,26 @@ func (lctx *lifecycleContextImpl) IsClosed() bool {
 	return lctx.closed
 }
 
-func checkIfCanceled(ctx context.Context) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	default:
-		return false
+// SetLogger sets the logger for the lifecycle context.
+// It returns an error if the provided logger is nil.
+func (lctx *lifecycleContextImpl) SetLogger(logger dilogger.Logger) error {
+	if logger == nil {
+		return fmt.Errorf("logger cannot be nil")
 	}
-}
 
-func setContextClosed(lctx *lifecycleContextImpl) {
 	lctx.mutex.Lock()
 	defer lctx.mutex.Unlock()
-	lctx.closed = true
+	lctx.logger = logger
+
+	lctx.logger.Debugf("Logger has been set for lifecycle context")
+
+	return nil
 }
 
 // Shutdown cleans up all scoped instances in the context.
 // Logs the operation and confirms the context has been closed.
 func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
-	diutils.DebugLog("[Context ID: %s] Closing lifecycle context...", lctx.ID())
+	lctx.logger.Debugf("[Context ID: %s] Closing lifecycle context...", lctx.ID())
 
 	// If a context is provided, use it; otherwise, use a background context
 	ctx := context.Background()
@@ -129,7 +135,7 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 
 	wg := sync.WaitGroup{}
 	for _, k := range cacheKeys {
-		diutils.DebugLog("[Context ID: %s] Deleting instance for service type: %v", lctx.ID(), k)
+		lctx.logger.Debugf("[Context ID: %s] Deleting instance for service type: %v", lctx.ID(), k)
 
 		instance, exists := lctx.cache.Get(k)
 		if !exists {
@@ -139,7 +145,7 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 		// Check if the instance implements the LifecycleListener interface, if not, skip it
 		lm, ok := instance.Interface().(LifecycleListener)
 		if !ok {
-			diutils.DebugLog("[Context ID: %s] Instance for service type: %v does not implement LifecycleListener, skipping EndLifecycle", lctx.ID(), k)
+			lctx.logger.Debugf("[Context ID: %s] Instance for service type: %v does not implement LifecycleListener, skipping EndLifecycle", lctx.ID(), k)
 			lctx.cache.Delete(k)
 			continue
 		}
@@ -157,27 +163,27 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 			defer semaphore.Release()
 			defer func() {
 				if r := recover(); r != nil {
-					diutils.DebugLog("[Context ID: %s] Recovered from panic in EndLifecycle for service type: %v, panic: %v", lctx.ID(), k, r)
+					lctx.logger.Debugf("[Context ID: %s] Recovered from panic in EndLifecycle for service type: %v, panic: %v", lctx.ID(), k, r)
 
 					setError(fmt.Errorf("panic in EndLifecycle for service type: %v, panic: %v", k, r))
 				}
 			}()
 
-			diutils.DebugLog("[Context ID: %s] Ending lifecycle for service type: %v...", lctx.ID(), k)
+			lctx.logger.Debugf("[Context ID: %s] Ending lifecycle for service type: %v...", lctx.ID(), k)
 
 			if err := lm.EndLifecycle(ctx); err != nil {
-				diutils.DebugLog("[Context ID: %s] Error ending lifecycle for service type: %v, error: %v", lctx.ID(), k, err)
+				lctx.logger.Debugf("[Context ID: %s] Error ending lifecycle for service type: %v, error: %v", lctx.ID(), k, err)
 				setError(fmt.Errorf("error in EndLifecycle for service type: %v: %w", k, err))
 			} else {
 				// Remove the instance from the cache
-				diutils.DebugLog("[Context ID: %s] Removing instance for service type: %v", lctx.ID(), k)
+				lctx.logger.Debugf("[Context ID: %s] Removing instance for service type: %v", lctx.ID(), k)
 				lctx.cache.Delete(k)
 			}
 		}(lm, k, lctx, ctx)
 	}
 	wg.Wait() // Wait for all EndLifecycle calls to complete
 
-	diutils.DebugLog("[Context ID: %s] Lifecycle context closed", lctx.ID())
+	lctx.logger.Debugf("[Context ID: %s] Lifecycle context closed", lctx.ID())
 	return errors
 }
 
@@ -185,23 +191,23 @@ func (lctx *lifecycleContextImpl) Shutdown(ctxs ...context.Context) []error {
 // Logs the operation and whether the instance was found.
 func (lctx *lifecycleContextImpl) GetInstance(key string) (reflect.Value, bool) {
 	if key == "" {
-		diutils.DebugLog("[Context ID: %s] GetInstance called with empty service type key", lctx.ID())
+		lctx.logger.Debugf("[Context ID: %s] GetInstance called with empty service type key", lctx.ID())
 		return reflect.Value{}, false
 	}
 	if lctx.IsClosed() {
-		diutils.DebugLog("[Context ID: %s] Cannot get instance from closed lifecycle context", lctx.ID())
+		lctx.logger.Debugf("[Context ID: %s] Cannot get instance from closed lifecycle context", lctx.ID())
 		return reflect.Value{}, false
 	}
 
 	lctx.mutex.RLock()
 	defer lctx.mutex.RUnlock()
 
-	diutils.DebugLog("[Context ID: %s] Getting instance for service type: %v", lctx.ID(), key)
+	lctx.logger.Debugf("[Context ID: %s] Getting instance for service type: %v", lctx.ID(), key)
 	instance, exists := lctx.cache.Get(key)
 	if exists {
-		diutils.DebugLog("[Context ID: %s] Instance found for service type: %v", lctx.ID(), key)
+		lctx.logger.Debugf("[Context ID: %s] Instance found for service type: %v", lctx.ID(), key)
 	} else {
-		diutils.DebugLog("[Context ID: %s] No instance found for service type: %v", lctx.ID(), key)
+		lctx.logger.Debugf("[Context ID: %s] No instance found for service type: %v", lctx.ID(), key)
 	}
 
 	return instance, exists
@@ -225,12 +231,27 @@ func (lctx *lifecycleContextImpl) SetInstance(key string, instance reflect.Value
 	lctx.mutex.Lock()
 	defer lctx.mutex.Unlock()
 
-	diutils.DebugLog("[Context ID: %s] Setting instance for service type: %v", lctx.ID(), key)
+	lctx.logger.Debugf("[Context ID: %s] Setting instance for service type: %v", lctx.ID(), key)
 	if _, exists := lctx.cache.Get(key); exists {
-		diutils.DebugLog("[Context ID: %s] Overwriting existing instance for service type: %v", lctx.ID(), key)
+		lctx.logger.Debugf("[Context ID: %s] Overwriting existing instance for service type: %v", lctx.ID(), key)
 	}
 
 	lctx.cache.Set(key, instance)
-	diutils.DebugLog("[Context ID: %s] Instance set for service type: %v", lctx.ID(), key)
+	lctx.logger.Debugf("[Context ID: %s] Instance set for service type: %v", lctx.ID(), key)
 	return nil
+}
+
+func checkIfCanceled(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func setContextClosed(lctx *lifecycleContextImpl) {
+	lctx.mutex.Lock()
+	defer lctx.mutex.Unlock()
+	lctx.closed = true
 }
