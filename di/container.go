@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	dilogger "github.com/lcrux/go-di/di/di-logger"
 	diutils "github.com/lcrux/go-di/di/di-utils"
 )
 
@@ -29,6 +30,7 @@ type Container interface {
 	Resolve(key string, ctx LifecycleContext) (interface{}, error)
 	Register(serviceType reflect.Type, key string, scope LifecycleScope, factoryFn interface{}) error
 	Validate() error
+	SetLogger(logger dilogger.Logger) error
 }
 
 // containerEntry represents a registered service in the container.
@@ -48,6 +50,7 @@ func NewContainer() Container {
 	container := &containerImpl{
 		registry:          diutils.NewAsyncMap[string, *containerEntry](),
 		lifecycleContexts: diutils.NewAsyncMap[string, LifecycleContext](),
+		logger:            dilogger.NewLogger(nil), // Initialize with a default logger, can be overridden by SetLogger
 	}
 	// Create the background lifecycle context
 	container.lifecycleContexts.Set(backgroundContextKey, NewLifecycleContext())
@@ -59,6 +62,7 @@ type containerImpl struct {
 	registry          diutils.AsyncMap[string, *containerEntry]  // Map to store registered services, keyed by their unique string keys
 	lifecycleContexts diutils.AsyncMap[string, LifecycleContext] // Map to store lifecycle contexts, keyed by their unique string keys (including the background context)
 	mutex             sync.RWMutex                               // Mutex to protect access when registering and validating services
+	logger            dilogger.Logger                            // Logger for logging container operations
 }
 
 // NewContext creates a new lifecycle context and adds it to the container.
@@ -67,6 +71,19 @@ func (c *containerImpl) NewContext() LifecycleContext {
 	ctx := NewLifecycleContext()
 	c.lifecycleContexts.Set(ctx.ID(), ctx)
 	return ctx
+}
+
+func (c *containerImpl) SetLogger(logger dilogger.Logger) error {
+	if logger == nil {
+		return fmt.Errorf("logger cannot be nil")
+	}
+	c.logger = logger
+	for _, ctx := range c.lifecycleContexts.Values() {
+		if err := ctx.SetLogger(logger); err != nil {
+			return fmt.Errorf("failed to set logger for context %s: %w", ctx.ID(), err)
+		}
+	}
+	return nil
 }
 
 // BackgroundContext returns the background lifecycle context.
@@ -119,7 +136,7 @@ func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 		return errors
 	}
 
-	diutils.DebugLog("Shutting down container and all lifecycle contexts...")
+	c.logger.Debugf("Shutting down container and all lifecycle contexts...")
 
 	semaphore := diutils.NewSemaphore()
 	defer semaphore.Done()
@@ -211,7 +228,7 @@ func (c *containerImpl) Register(serviceType reflect.Type, key string, scope Lif
 		entry.factoryFnParams[i] = factoryFnType.In(i)
 	}
 
-	diutils.DebugLog("Registered service: %s with key: %s scope: %v", serviceType.String(), key, scope)
+	c.logger.Debugf("Registered service: %s with key: %s scope: %v", serviceType.String(), key, scope)
 	return nil
 }
 
@@ -296,15 +313,13 @@ func (c *containerImpl) resolveEntryWithDeps(
 	ctx LifecycleContext,
 ) (interface{}, error) {
 	serviceType := entry.serviceType
-	diutils.DebugLog("Resolving service: %s with key: %s", serviceType.String(), key)
+	c.logger.Debugf("Resolving service: %s with key: %s", serviceType.String(), key)
 
 	// Get the dependency tree for the service
 	dependencies, err := c.getDependencyTree(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dependency tree for %s: %w", serviceType.String(), err)
 	}
-
-	diutils.DebugLog("Dependencies for service %s: %v", serviceType.String(), dependencies)
 
 	// Resolve the dependencies for the service
 	resolved, err := c.resolveDependencies(dependencies, ctx)
@@ -318,7 +333,7 @@ func (c *containerImpl) resolveEntryWithDeps(
 		return nil, fmt.Errorf("failed to resolve service: %s", serviceType.String())
 	}
 
-	diutils.DebugLog("Successfully resolved service: %s", serviceType.String())
+	c.logger.Debugf("Successfully resolved service: %s", serviceType.String())
 	return value.Interface(), nil
 }
 
@@ -408,7 +423,7 @@ func (c *containerImpl) resolveDependencies(dependencies []*containerEntry, ctx 
 			continue
 		}
 
-		diutils.DebugLog("Resolving dependency: %s", depType.String())
+		c.logger.Debugf("Resolving dependency: %s", depType.String())
 		// Resolve the current dependency within a locked context to ensure thread safety
 		instance, err := func() (reflect.Value, error) {
 			if entry.scope == Singleton || entry.scope == Scoped {
@@ -420,7 +435,7 @@ func (c *containerImpl) resolveDependencies(dependencies []*containerEntry, ctx 
 			// Check if the instance is already cached for Singleton or Scoped scope
 			cached, ok := c.loadInstance(ctx, entry)
 			if ok {
-				diutils.DebugLog("Using cached instance for: %s", depType.String())
+				c.logger.Debugf("Using cached instance for: %s", depType.String())
 				return cached, nil
 			}
 
@@ -452,7 +467,7 @@ func (c *containerImpl) resolveDependencies(dependencies []*containerEntry, ctx 
 				return zero, err
 			}
 
-			diutils.DebugLog("Created new instance for: %s", depType.String())
+			c.logger.Debugf("Created new instance for: %s", depType.String())
 			return instance, nil
 		}()
 		if err != nil {

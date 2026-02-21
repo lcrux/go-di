@@ -271,19 +271,75 @@ go test ./demo/...
 
 ## Debugging
 
-The library includes `DebugLog` functions to help with debugging. Ensure that debugging is enabled in your environment to see detailed logs.
+The library includes a `Logger` to help with debugging. Logging verbosity is controlled by the `GODI_LOG_LEVEL` environment variable, which is case-insensitive. Set this variable to one of the following values to control the log output:
+
+- `DEBUG`
+- `INFO`
+- `WARN`
+- `ERROR`
+
+The default log level is `ERROR` if the variable is not set or is set to an unknown value. If an unknown value is provided, a warning will be printed and the log level will fall back to `ERROR`.
+
+For example, to enable debug-level logging:
 
 ```bash
-# Enable debugging for go-di
-
 # Linux / macOS
-export GODI_DEBUG=true
+export GODI_LOG_LEVEL=DEBUG
 
 # Windows PowerShell
-$env:GODI_DEBUG="true"
+$env:GODI_LOG_LEVEL="DEBUG"
 
 # Windows Command Prompt
-set GODI_DEBUG=true
+set GODI_LOG_LEVEL=DEBUG
+```
+
+The log level can be changed at run time by setting the log level when creating a new logger or calling the `SetLevel` method in the `Logger` interface.
+
+Example:
+
+```go
+logger := dilogger.NewLogger(func(o *dilogger.LoggerOptions) {
+    o.LogLevel = dilogger.DEBUG
+})
+
+// or...
+logger := dilogger.NewLogger(nil)
+logger.SetLevel(dilogger.DEBUG)
+
+// Create container instance and set the custom logger
+container := di.NewContainer()
+defer container.Shutdown()
+
+// Sets the custom logger for the container
+container.SetLogger(logger) 
+```
+
+### Customizing the Logger
+
+You can customize the logger by replacing the default logging functions in the `LoggerOptions` struct. This allows you to integrate with existing logging frameworks or customize the log output format.
+
+Example:
+
+```go
+logger := dilogger.NewLogger(func(o *dilogger.LoggerOptions) {
+    o.LogLevel = dilogger.INFO
+    o.Info = func(format string, v ...interface{}) {
+        // Custom log output for info level
+        log.Printf("[INFO] %s\n", fmt.Sprintf(format, v...))
+    }
+    o.Warn = func(format string, v ...interface{}) {
+        // Custom log output for warn level
+        log.Printf("[WARN] %s\n", fmt.Sprintf(format, v...))
+    }
+    o.Debug = func(format string, v ...interface{}) {
+        // Custom log output for debug level
+        log.Printf("[DEBUG] %s\n", fmt.Sprintf(format, v...))
+    }
+    o.Error = func(format string, v ...interface{}) {
+        // Custom log output for error level
+        log.Printf("[ERROR] %s\n", fmt.Sprintf(format, v...))
+    }
+})
 ```
 
 ## Development Guide
