@@ -3,10 +3,12 @@ package di
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync/atomic"
 	"testing"
 
+	dilogger "github.com/lcrux/go-di/di/di-logger"
 	diutils "github.com/lcrux/go-di/di/di-utils"
 )
 
@@ -172,6 +174,31 @@ func TestLifecycleContext_Shutdown_EmptyContext(t *testing.T) {
 	errs := ctx.Shutdown()
 	if len(errs) != 0 {
 		t.Fatalf("Expected no errors, got %d", len(errs))
+	}
+}
+
+func TestLifecycleContext_SetLogger_RejectsNil(t *testing.T) {
+	ctx := NewLifecycleContext()
+	err := ctx.SetLogger(nil)
+	if err == nil {
+		t.Fatal("expected error when setting nil logger")
+	}
+}
+
+func TestLifecycleContext_SetLogger_SetsLogger(t *testing.T) {
+	ctx := NewLifecycleContext()
+	var logged string
+	logger := dilogger.NewLogger(func(o *dilogger.LoggerOptions) {
+		o.LogLevel = dilogger.Debug
+		o.Debug = func(format string, v ...interface{}) {
+			logged = fmt.Sprintf(format, v...)
+		}
+	})
+	if err := ctx.SetLogger(logger); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if logged == "" {
+		t.Fatal("expected debug log message after setting logger")
 	}
 }
 
