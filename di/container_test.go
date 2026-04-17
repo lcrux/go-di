@@ -194,6 +194,45 @@ func TestContainer_Shutdown_CanceledContextSkipsLifecycleEnd(t *testing.T) {
 	}
 }
 
+// TestContainer_Shutdown_ConcurrentResolveNoPanic reproduces the nil-background-context window
+// described in issue #41: a concurrent Resolve during Shutdown could call BackgroundContext()
+// in the brief gap after the old map was replaced but before the new background context was set,
+// receiving nil and then panicking in loadInstance.
+func TestContainer_Shutdown_ConcurrentResolveNoPanic(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		c := NewContainer()
+
+		if err := Register[*depA](c, Singleton, func() *depA { return &depA{name: "a"} }); err != nil {
+			t.Fatalf("unexpected register error: %v", err)
+		}
+
+		// Pre-warm the dependency tree cache to avoid the pre-existing dependencyTreeCache data race.
+		if _, err := Resolve[*depA](c, nil); err != nil {
+			t.Fatalf("unexpected resolve error during warm-up: %v", err)
+		}
+
+		// Spin up many goroutines calling Resolve concurrently with Shutdown so that at least
+		// one is likely to hit the window between the map replacement and the Set call.
+		var wg sync.WaitGroup
+		for j := 0; j < 20; j++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				// Ignore errors — the service may not resolve after shutdown; what matters is no panic.
+				_, _ = Resolve[*depA](c, nil)
+			}()
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.Shutdown()
+		}()
+
+		wg.Wait()
+	}
+}
+
 func TestContainer_Validate_IgnoresContainerAndContextDependencies(t *testing.T) {
 	c := NewContainer()
 

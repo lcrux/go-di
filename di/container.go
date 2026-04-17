@@ -88,7 +88,10 @@ func (c *containerImpl) SetLogger(logger dilogger.Logger) error {
 
 // BackgroundContext returns the background lifecycle context.
 func (c *containerImpl) BackgroundContext() LifecycleContext {
-	if value, exists := c.lifecycleContexts.Get(backgroundContextKey); exists {
+	c.mutex.RLock()
+	lc := c.lifecycleContexts
+	c.mutex.RUnlock()
+	if value, exists := lc.Get(backgroundContextKey); exists {
 		return value
 	}
 	return nil
@@ -171,9 +174,14 @@ func (c *containerImpl) Shutdown(ctxs ...context.Context) []error {
 	wg.Wait()
 
 	if !checkIfCanceled(ctx) {
-		// Reset the lifecycle contexts after shutdown, keeps a clean background context to avoid nil references
-		c.lifecycleContexts = diutils.NewAsyncMap[string, LifecycleContext]()
-		c.lifecycleContexts.Set(backgroundContextKey, NewLifecycleContext())
+		// Reset the lifecycle contexts after shutdown, keeps a clean background context to avoid nil references.
+		// Build the new map with the background context already present before swapping it in, so that
+		// a concurrent Resolve() call can never observe a window where BackgroundContext() returns nil.
+		newLifecycleContexts := diutils.NewAsyncMap[string, LifecycleContext]()
+		newLifecycleContexts.Set(backgroundContextKey, NewLifecycleContext())
+		c.mutex.Lock()
+		c.lifecycleContexts = newLifecycleContexts
+		c.mutex.Unlock()
 	}
 
 	return errors
