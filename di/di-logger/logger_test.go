@@ -1,7 +1,9 @@
 package dilogger
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"testing"
@@ -154,3 +156,137 @@ func TestLoggerImpl_SpecialCharacters(t *testing.T) {
 		t.Fatalf("Expected '%s', got '%s'", message, got)
 	}
 }
+
+func TestIsLoggerFunc_NilInterfaceReturnsFalse(t *testing.T) {
+	if isLoggerFunc(nil) {
+		t.Fatal("expected false for nil interface")
+	}
+}
+
+func TestWarnf_EarlyReturn_WhenLogLevelIsError(t *testing.T) {
+	called := false
+	l := &loggerImpl{options: &LoggerOptions{
+		LogLevel: Error,
+		Warn:     func(_ string, _ ...interface{}) { called = true },
+	}}
+	l.Warnf("should be silenced")
+	if called {
+		t.Fatal("expected Warnf to return early at Error log level")
+	}
+}
+
+func TestErrorf_EarlyReturn_WhenLogLevelAboveError(t *testing.T) {
+	called := false
+	l := &loggerImpl{options: &LoggerOptions{
+		LogLevel: LogLevel(4),
+		Error:    func(_ string, _ ...interface{}) { called = true },
+	}}
+	l.Errorf("should be silenced")
+	if called {
+		t.Fatal("expected Errorf to return early when log level is above Error")
+	}
+}
+
+func TestDefaultInfoLogger_UsedWhenNoCustomFunc(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(orig)
+
+	logger := NewLogger(func(o *LoggerOptions) { o.LogLevel = Info })
+	logger.Infof("hello info")
+
+	if !strings.Contains(buf.String(), "hello info") {
+		t.Fatalf("expected default info logger output, got: %s", buf.String())
+	}
+}
+
+func TestDefaultDebugLogger_UsedWhenNoCustomFunc(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(orig)
+
+	logger := NewLogger(func(o *LoggerOptions) { o.LogLevel = Debug })
+	logger.Debugf("hello debug")
+
+	if !strings.Contains(buf.String(), "hello debug") {
+		t.Fatalf("expected default debug logger output, got: %s", buf.String())
+	}
+}
+
+func TestDefaultWarnLogger_UsedWhenNoCustomFunc(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(orig)
+
+	logger := NewLogger(func(o *LoggerOptions) { o.LogLevel = Warn })
+	logger.Warnf("hello warn")
+
+	if !strings.Contains(buf.String(), "hello warn") {
+		t.Fatalf("expected default warn logger output, got: %s", buf.String())
+	}
+}
+
+func TestDefaultErrorLogger_UsedWhenNoCustomFunc(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(orig)
+
+	logger := NewLogger(func(o *LoggerOptions) { o.LogLevel = Error })
+	logger.Errorf("hello error")
+
+	if !strings.Contains(buf.String(), "hello error") {
+		t.Fatalf("expected default error logger output, got: %s", buf.String())
+	}
+}
+
+func TestInitLogLevel_Unknown_DefaultsToErrorAndLogs(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(orig)
+
+	initLogLevel("INVALID")
+	if defaultLogLevel != Error {
+		t.Fatalf("expected Error for unknown level, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Info(t *testing.T) {
+	initLogLevel("info")
+	if defaultLogLevel != Info {
+		t.Fatalf("expected Info, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Debug(t *testing.T) {
+	initLogLevel("debug")
+	if defaultLogLevel != Debug {
+		t.Fatalf("expected Debug, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Warn(t *testing.T) {
+	initLogLevel("WARN")
+	if defaultLogLevel != Warn {
+		t.Fatalf("expected Warn, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Error(t *testing.T) {
+	initLogLevel("ERROR")
+	if defaultLogLevel != Error {
+		t.Fatalf("expected Error, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Empty_DefaultsToError(t *testing.T) {
+	initLogLevel("")
+	if defaultLogLevel != Error {
+		t.Fatalf("expected Error for empty string, got %d", defaultLogLevel)
+	}
+}
+

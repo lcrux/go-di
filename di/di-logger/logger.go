@@ -19,7 +19,11 @@ const (
 var defaultLogLevel LogLevel
 
 func init() {
-	envLogLevel := strings.ToUpper(strings.TrimSpace(os.Getenv("GODI_LOG_LEVEL")))
+	initLogLevel(os.Getenv("GODI_LOG_LEVEL"))
+}
+
+func initLogLevel(envLogLevel string) {
+	envLogLevel = strings.ToUpper(strings.TrimSpace(envLogLevel))
 	switch envLogLevel {
 	case "INFO":
 		defaultLogLevel = Info
