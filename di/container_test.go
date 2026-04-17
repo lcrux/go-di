@@ -2,6 +2,7 @@ package di
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -205,4 +206,38 @@ func TestContainer_Validate_IgnoresContainerAndContextDependencies(t *testing.T)
 	if err := c.Validate(); err != nil {
 		t.Fatalf("expected validation to ignore container and context dependencies, got: %v", err)
 	}
+}
+
+// TestContainer_getDependencyTree_NoDataRace verifies that concurrent calls to getDependencyTree
+// for the same key do not cause a data race on dependencyTreeCache.
+func TestContainer_getDependencyTree_NoDataRace(t *testing.T) {
+	c := NewContainer()
+
+	if err := Register[*depA](c, Transient, func() *depA { return &depA{name: "a"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	if err := Register[*depB](c, Transient, func() *depB { return &depB{name: "b"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	if err := Register[*depC](c, Transient, func(a *depA, b *depB) *depC { return &depC{a: a, b: b} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, err := Resolve[*depC](c, nil); err != nil {
+				t.Errorf("unexpected resolve error: %v", err)
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
 }
