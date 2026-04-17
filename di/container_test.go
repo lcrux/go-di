@@ -2,8 +2,12 @@ package di
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"sync/atomic"
 	"testing"
+
+	dilogger "github.com/lcrux/go-di/di/di-logger"
 )
 
 type depA struct {
@@ -190,6 +194,61 @@ func TestContainer_Shutdown_CanceledContextSkipsLifecycleEnd(t *testing.T) {
 	}
 	if called != 0 {
 		t.Fatalf("expected EndLifecycle not to be called, got %d", called)
+	}
+}
+
+type errSetLoggerContext struct {
+	id string
+}
+
+func (e *errSetLoggerContext) ID() string                                    { return e.id }
+func (e *errSetLoggerContext) IsClosed() bool                                { return false }
+func (e *errSetLoggerContext) Shutdown(...context.Context) []error           { return nil }
+func (e *errSetLoggerContext) GetInstance(string) (reflect.Value, bool)      { return reflect.Value{}, false }
+func (e *errSetLoggerContext) SetInstance(string, reflect.Value) error       { return nil }
+func (e *errSetLoggerContext) SetLogger(_ dilogger.Logger) error {
+	return fmt.Errorf("mock SetLogger error")
+}
+
+func TestContainer_SetLogger_RejectsNil(t *testing.T) {
+	c := NewContainer()
+	if err := c.SetLogger(nil); err == nil {
+		t.Fatal("expected error when setting nil logger")
+	}
+}
+
+func TestContainer_SetLogger_SetsLoggerWithNoAdditionalContexts(t *testing.T) {
+	c := NewContainer()
+	logger := dilogger.NewLogger(nil)
+	if err := c.SetLogger(logger); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestContainer_SetLogger_PropagatestoExistingContexts(t *testing.T) {
+	c := NewContainer()
+	_ = c.NewContext()
+	var debugLogged bool
+	logger := dilogger.NewLogger(func(o *dilogger.LoggerOptions) {
+		o.LogLevel = dilogger.Debug
+		o.Debug = func(_ string, _ ...interface{}) { debugLogged = true }
+	})
+	if err := c.SetLogger(logger); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !debugLogged {
+		t.Fatal("expected logger to be propagated to existing contexts and log")
+	}
+}
+
+func TestContainer_SetLogger_PropagatesErrorFromContext(t *testing.T) {
+	c := NewContainer()
+	impl := c.(*containerImpl)
+	impl.lifecycleContexts.Set("mock-key", &errSetLoggerContext{id: "mock-ctx-id"})
+
+	logger := dilogger.NewLogger(nil)
+	if err := c.SetLogger(logger); err == nil {
+		t.Fatal("expected error when context SetLogger fails")
 	}
 }
 
