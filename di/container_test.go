@@ -2,6 +2,7 @@ package di
 
 import (
 	"context"
+	"reflect"
 	"sync/atomic"
 	"testing"
 )
@@ -190,6 +191,45 @@ func TestContainer_Shutdown_CanceledContextSkipsLifecycleEnd(t *testing.T) {
 	}
 	if called != 0 {
 		t.Fatalf("expected EndLifecycle not to be called, got %d", called)
+	}
+}
+
+func TestPersistInstance_Scoped_NilCtx_FallsBackToBackground(t *testing.T) {
+	c := NewContainer()
+	impl := c.(*containerImpl)
+	entry := &containerEntry{scope: Scoped, key: "test-nil-ctx-key"}
+	instance := reflect.ValueOf(&depA{name: "a"})
+
+	if err := impl.persistInstance(nil, entry, instance); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := c.BackgroundContext().GetInstance("test-nil-ctx-key"); !ok {
+		t.Fatal("expected instance stored in background context when ctx is nil")
+	}
+}
+
+func TestPersistInstance_Singleton_ErrorOnClosedBackgroundContext(t *testing.T) {
+	c := NewContainer()
+	if err := Register[*depA](c, Singleton, func() *depA { return &depA{name: "a"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	c.BackgroundContext().Shutdown()
+
+	if _, err := Resolve[*depA](c, nil); err == nil {
+		t.Fatal("expected error resolving Singleton into closed background context")
+	}
+}
+
+func TestPersistInstance_Scoped_ErrorOnClosedContext(t *testing.T) {
+	c := NewContainer()
+	if err := Register[*depA](c, Scoped, func() *depA { return &depA{name: "a"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+	ctx := c.NewContext()
+	ctx.Shutdown()
+
+	if _, err := Resolve[*depA](c, ctx); err == nil {
+		t.Fatal("expected error resolving Scoped service into closed lifecycle context")
 	}
 }
 
