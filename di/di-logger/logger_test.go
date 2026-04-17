@@ -7,6 +7,48 @@ import (
 	"testing"
 )
 
+func TestInitLogLevel_Info(t *testing.T) {
+	initLogLevel("info")
+	if defaultLogLevel != Info {
+		t.Fatalf("expected Info, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Debug(t *testing.T) {
+	initLogLevel("debug")
+	if defaultLogLevel != Debug {
+		t.Fatalf("expected Debug, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Warn(t *testing.T) {
+	initLogLevel("WARN")
+	if defaultLogLevel != Warn {
+		t.Fatalf("expected Warn, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Error(t *testing.T) {
+	initLogLevel("ERROR")
+	if defaultLogLevel != Error {
+		t.Fatalf("expected Error, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Empty_DefaultsToError(t *testing.T) {
+	initLogLevel("")
+	if defaultLogLevel != Error {
+		t.Fatalf("expected Error for empty string, got %d", defaultLogLevel)
+	}
+}
+
+func TestInitLogLevel_Unknown_DefaultsToErrorAndLogs(t *testing.T) {
+	initLogLevel("INVALID")
+	if defaultLogLevel != Error {
+		t.Fatalf("expected Error for unknown level, got %d", defaultLogLevel)
+	}
+}
+
 func TestLoggerImpl_LogLevelFiltering(t *testing.T) {
 	called := make(map[string]bool)
 	opts := &LoggerOptions{
