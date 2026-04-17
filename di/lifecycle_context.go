@@ -224,12 +224,17 @@ func (lctx *lifecycleContextImpl) SetInstance(key string, instance reflect.Value
 	if !instance.IsValid() {
 		return fmt.Errorf("instance value is not valid")
 	}
-	if lctx.IsClosed() {
-		return fmt.Errorf("cannot set instance on closed lifecycle context")
-	}
 
 	lctx.mutex.Lock()
 	defer lctx.mutex.Unlock()
+
+	// Check closed inside the write lock so the check and the write are atomic.
+	// Checking via IsClosed() first (which acquires and then releases a read lock)
+	// creates a check-then-act race: Shutdown can close the context in the window
+	// between IsClosed() returning and this write lock being acquired.
+	if lctx.closed {
+		return fmt.Errorf("cannot set instance on closed lifecycle context")
+	}
 
 	lctx.logger.Debugf("[Context ID: %s] Setting instance for service type: %v", lctx.ID(), key)
 	if _, exists := lctx.cache.Get(key); exists {
