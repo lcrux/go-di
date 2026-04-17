@@ -342,8 +342,13 @@ func (c *containerImpl) resolveEntryWithDeps(
 // It detects circular dependencies and returns an error if any are found.
 func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error) {
 
-	if entry, exists := c.registry.Get(key); exists && entry.dependencyTreeCache != nil {
-		return entry.dependencyTreeCache, nil
+	if entry, exists := c.registry.Get(key); exists {
+		entry.mutex.Lock()
+		cached := entry.dependencyTreeCache
+		entry.mutex.Unlock()
+		if cached != nil {
+			return cached, nil
+		}
 	}
 	seen := make(map[*containerEntry]bool)
 	visiting := make(map[*containerEntry]bool)
@@ -400,7 +405,9 @@ func (c *containerImpl) getDependencyTree(key string) ([]*containerEntry, error)
 	}
 
 	if entry, exists := c.registry.Get(key); exists {
+		entry.mutex.Lock()
 		entry.dependencyTreeCache = order
+		entry.mutex.Unlock()
 	}
 
 	return order, nil
