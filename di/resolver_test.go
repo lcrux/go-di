@@ -394,6 +394,20 @@ func TestMustResolveWithKey_PanicsOnResolveError(t *testing.T) {
 	_ = MustResolveWithKey[*depA](c, "missing.key", nil)
 }
 
+func TestMustResolveWithKey_Succeeds(t *testing.T) {
+	c := NewContainer()
+	ctx := c.NewContext()
+
+	if err := RegisterWithKey[*depA](c, "custom.key", Transient, func() *depA { return &depA{name: "ok"} }); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	instance := MustResolveWithKey[*depA](c, "custom.key", ctx)
+	if instance == nil || instance.name != "ok" {
+		t.Fatal("expected to resolve instance by custom key")
+	}
+}
+
 func TestMustResolve_Succeeds(t *testing.T) {
 	c := NewContainer()
 	ctx := c.NewContext()
